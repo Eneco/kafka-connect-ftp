@@ -1,0 +1,9 @@
+/.idea
+# sbt specific
+target/
+# Scala-IDE specific
+/.settings
+/.project
+/.classpath
+/.cache-main
+/.cache-tests

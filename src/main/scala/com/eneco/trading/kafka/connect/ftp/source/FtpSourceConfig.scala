@@ -15,12 +15,14 @@ object FtpSourceConfig {
   val RefreshRate = "ftp.refresh"
   val MonitorTail = "ftp.monitor.tail"
   val MonitorUpdate = "ftp.monitor.update"
+  val FileMaxAge = "ftp.file.maxage"
 
   val definition: ConfigDef = new ConfigDef()
     .define(Address, Type.STRING, Importance.HIGH, "ftp address")
     .define(User, Type.STRING, Importance.HIGH, "ftp user name to login")
     .define(Password, Type.PASSWORD, Importance.HIGH, "ftp password to login")
-    .define(RefreshRate, Type.LONG, Importance.HIGH, "how often the ftp server is polled, in seconds")
+    .define(RefreshRate, Type.STRING, Importance.HIGH, "how often the ftp server is polled; ISO8601 duration")
+    .define(FileMaxAge, Type.STRING, Importance.HIGH, "ignore files older than this; ISO8601 duration")
     .define(MonitorTail, Type.LIST, Importance.HIGH, "TODO")
     .define(MonitorUpdate, Type.LIST, Importance.HIGH, "TODO")
 }

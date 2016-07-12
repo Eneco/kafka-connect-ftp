@@ -35,13 +35,15 @@ case class MonitoredDirectory(directory:String, filenameRegex:String, tail:Boole
 
 case class FileBody(bytes:Array[Byte], offset:Long)
 
+case class FtpMonitorSettings(host:String, user:String, pass:String, maxAge: Option[Duration],directories: Seq[MonitoredDirectory])
+
 trait FileMetaDataStore {
   def get(path:String) : Option[FileMetaData]
   def set(path:String, fileMetaData: FileMetaData)
 }
 
-class FtpMonitor(host:String, user:String, pass:String, watchers: Seq[MonitoredDirectory], knownFiles: FileMetaDataStore) extends Logging {
-  val MaxAge = Duration.ofDays(1)
+class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) extends Logging {
+  val MaxAge = settings.maxAge.getOrElse(Duration.ofDays(Long.MaxValue))
 
   val ftp = new FTPClient()
 
@@ -129,9 +131,9 @@ class FtpMonitor(host:String, user:String, pass:String, watchers: Seq[MonitoredD
   // TODO
   def connectFtp(): Try[FTPClient] = {
     if (!ftp.isConnected) {
-      ftp.connect(host)
+      ftp.connect(settings.host)
       println(ftp.getReplyString)
-      ftp.login(user, pass)
+      ftp.login(settings.user, settings.pass)
       println(ftp.getReplyString)
       if (!ftp.isConnected) {
         Failure(new Exception("cannot connect ftp TODO"))
@@ -142,7 +144,7 @@ class FtpMonitor(host:String, user:String, pass:String, watchers: Seq[MonitoredD
 
   def poll(): Try[Seq[(FileMetaData, FileBody, MonitoredDirectory)]] = connectFtp() match {
       case Success(_) =>
-        val v = watchers.flatMap(w => {
+        val v = settings.directories.flatMap(w => {
           val results: Seq[(FileMetaData, Option[FileBody])] = fetchFromMonitoredPlaces(w)
           results.flatMap {
             case (meta, Some(body)) =>

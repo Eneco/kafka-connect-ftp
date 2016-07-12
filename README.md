@@ -25,8 +25,11 @@ ftp.address=localhost
 ftp.user=ftp
 ftp.password=ftp
 
-#refresh rate in seconds
-ftp.refresh=15
+#refresh rate ISO8601 duration
+ftp.refresh=PT5S
+
+#ignore files older than ISO8601 duration
+ftp.file.maxage=P7D
 
 #comma separated lists of path:destinationtopic
 #only yield the tail of these files

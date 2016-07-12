@@ -30,19 +30,22 @@ class FtpSourceTask extends SourceTask with Logging {
     require(metaStore.isDefined) // TODO
     val Some(store) = metaStore
     val sourceConfig = new FtpSourceConfig(props)
-    sourceConfig.ftpMonitorConfigs.foreach(cfg=> {
+    sourceConfig.ftpMonitorConfigs.foreach(cfg => {
       val style = if (cfg.tail) "tail" else "updates"
-      log.info(s"config tells us to track the ${style} of files in `${cfg.path}` to topic `${cfg.topic}")})
+      log.info(s"config tells us to track the ${style} of files in `${cfg.path}` to topic `${cfg.topic}")
+    })
 
-    monitor2topic = sourceConfig.ftpMonitorConfigs().map(cfg=>(MonitoredDirectory(cfg.path,".*",cfg.tail),cfg.topic)).toMap
+    monitor2topic = sourceConfig.ftpMonitorConfigs().map(cfg => (MonitoredDirectory(cfg.path, ".*", cfg.tail), cfg.topic)).toMap
 
-    pollDuration = Duration.ofSeconds(sourceConfig.getLong(FtpSourceConfig.RefreshRate))
+    pollDuration = Duration.parse(sourceConfig.getString(FtpSourceConfig.RefreshRate))
 
     ftpMonitor = Some(new FtpMonitor(
-      sourceConfig.getString(FtpSourceConfig.Address),
-      sourceConfig.getString(FtpSourceConfig.User),
-      sourceConfig.getPassword(FtpSourceConfig.Password).value,
-      monitor2topic.keys.toSeq,
+      FtpMonitorSettings(
+        sourceConfig.getString(FtpSourceConfig.Address),
+        sourceConfig.getString(FtpSourceConfig.User),
+        sourceConfig.getPassword(FtpSourceConfig.Password).value,
+        Some(Duration.parse(sourceConfig.getString(FtpSourceConfig.FileMaxAge))),
+        monitor2topic.keys.toSeq),
       store))
   }
 

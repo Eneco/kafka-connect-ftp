@@ -10,13 +10,12 @@ import org.apache.kafka.connect.source.{SourceRecord, SourceTask, SourceTaskCont
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success}
 
-
-
 class FtpSourceTask extends SourceTask with Logging {
   var ftpMonitor: Option[FtpMonitor] = None
   var lastPoll = Instant.EPOCH
-  val PollDuration = Duration.ofSeconds(10)
+  var pollDuration = Duration.ofSeconds(Long.MaxValue)
   var metaStore:Option[ConnectFileMetaDataStore] = None
+  var monitor2topic = Map[MonitoredDirectory, String]()
 
   override def initialize(context: SourceTaskContext ) {
     metaStore = Some(new ConnectFileMetaDataStore(context))
@@ -31,32 +30,41 @@ class FtpSourceTask extends SourceTask with Logging {
     require(metaStore.isDefined) // TODO
     val Some(store) = metaStore
     val sourceConfig = new FtpSourceConfig(props)
+    sourceConfig.ftpMonitorConfigs.foreach(cfg=> {
+      val style = if (cfg.tail) "tail" else "updates"
+      log.info(s"config tells us to track the ${style} of files in `${cfg.path}` to topic `${cfg.topic}")})
+
+    monitor2topic = sourceConfig.ftpMonitorConfigs().map(cfg=>(MonitoredDirectory(cfg.path,".*",cfg.tail),cfg.topic)).toMap
+
+    pollDuration = Duration.ofSeconds(sourceConfig.getLong(FtpSourceConfig.RefreshRate))
+
     ftpMonitor = Some(new FtpMonitor(
       sourceConfig.getString(FtpSourceConfig.Address),
       sourceConfig.getString(FtpSourceConfig.User),
       sourceConfig.getPassword(FtpSourceConfig.Password).value,
-      new MonitoredDirectory("/", ".*", true) :: Nil,
+      monitor2topic.keys.toSeq,
       store))
   }
 
   override def version(): String = getClass.getPackage.getImplementationVersion
 
   override def poll(): util.List[SourceRecord] = {
+    log.info("poll")
     require(metaStore.isDefined) // TODO
     val Some(store) = metaStore
-    log.info("poll")
     ftpMonitor match {
-      case Some(ftp) if Instant.now.isAfter(lastPoll.plus(PollDuration)) =>
+      case Some(ftp) if Instant.now.isAfter(lastPoll.plus(pollDuration)) =>
         ftp.poll() match {
           case Success(fileChanges) =>
             lastPoll = Instant.now
-            fileChanges.map { case (meta, body) =>
+            fileChanges.map { case (meta, body, w) =>
               log.info(s"got some fileChanges: ${meta.attribs.path}")
               store.set(meta.attribs.path, meta)
+              val topic = monitor2topic.get(w).get
               new SourceRecord(
                 store.fileMetasToConnectPartition(meta),  // source part
                 store.fileMetasToConnectOffset(meta), // source off
-                "ftp-hardcoded", //top
+                topic, //topic
                 Schema.STRING_SCHEMA, // key sch
                 meta.attribs.path, // key
                 Schema.BYTES_SCHEMA, // val sch

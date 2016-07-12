@@ -6,10 +6,8 @@ import java.time.{Duration, Instant}
 import java.util
 
 import org.apache.commons.codec.digest.DigestUtils
-import org.apache.commons.net.ftp.FTPClient
-import org.apache.commons.net.ftp.FTPFile
+import org.apache.commons.net.ftp.{FTPClient, FTPFile}
 
-import scala.collection.mutable
 import scala.util.{Failure, Success, Try}
 
 // what the ftp can tell us without actually fetching the file
@@ -142,18 +140,14 @@ class FtpMonitor(host:String, user:String, pass:String, watchers: Seq[MonitoredD
     Success(ftp)
   }
 
-  def poll(): Try[Seq[(FileMetaData, FileBody)]] = {
-    log.info("poll")
-    //knownFiles.values.foreach(kf => log.info(s"we know upfront: ${kf}"))
-
-    val result: Try[Seq[(FileMetaData, FileBody)]] = connectFtp() match {
+  def poll(): Try[Seq[(FileMetaData, FileBody, MonitoredDirectory)]] = connectFtp() match {
       case Success(_) =>
         val v = watchers.flatMap(w => {
           val results: Seq[(FileMetaData, Option[FileBody])] = fetchFromMonitoredPlaces(w)
           results.flatMap {
             case (meta, Some(body)) =>
               log.info(s"${meta.attribs.path} got @ offset ${body.offset} `" + new String(body.bytes) + "`")
-              Some((meta,body))
+              Some((meta,body, w))
             case (meta, None) =>
               log.info(s"${meta.attribs.path} got no bytes")
               None
@@ -163,10 +157,4 @@ class FtpMonitor(host:String, user:String, pass:String, watchers: Seq[MonitoredD
       case Failure(err) => log.warn(s"cannot connect to ftp: ${err.toString}")
         Failure(err)
     }
-
-    //knownFiles.values.foreach(kf => log.info(s"we know afterwards: ${kf}"))
-    log.info("~poll")
-    //result.map(files=>files)
-    result
-  }
 }

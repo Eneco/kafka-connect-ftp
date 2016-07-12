@@ -15,28 +15,35 @@ case class FileAttributes(path: String, size: Long, timestamp: Instant) {
   override def toString() = s"(path: ${path}, size: ${size}, timestamp: ${timestamp})"
 }
 
-//this is persistent data
+// used to administer the files
+// this is persistent data, stored into the connect offsets
 case class FileMetaData(attribs:FileAttributes, hash:String, firstFetched:Instant, lastModified:Instant, lastInspected:Instant) {
   def modifiedNow() = FileMetaData(attribs, hash, firstFetched, Instant.now, lastInspected)
   def inspectedNow() = FileMetaData(attribs, hash, firstFetched, lastModified, Instant.now)
   override def toString() = s"(remoteInfo: ${attribs}, hash: ${hash}, firstFetched: ${firstFetched}, lastModified: ${lastModified}, lastInspected: ${lastInspected}"
 }
 
+// a full downloaded file
 case class FetchedFile(meta:FileMetaData, body: Array[Byte])
 
+// org.apache.commons.net.ftp.FTPFile only contains the relative path
 case class AbsoluteFtpFile(ftpFile:FTPFile, parentDir:String) {
   def path() = Paths.get(parentDir, ftpFile.getName).toString
   def age(): Duration = Duration.between(ftpFile.getTimestamp.toInstant,Instant.now)
 }
 
+// tells to monitor which directory and how files are delt with, might be better a trait and is TODO
 case class MonitoredDirectory(directory:String, filenameRegex:String, tail:Boolean) {
-  def isFileRelevant(f:AbsoluteFtpFile):Boolean = true
+  def isFileRelevant(f:AbsoluteFtpFile):Boolean = true // TODO use regex for file name
 }
 
+// a potential partial file
 case class FileBody(bytes:Array[Byte], offset:Long)
 
+// instructs the FtpMonitor how to do its things
 case class FtpMonitorSettings(host:String, user:String, pass:String, maxAge: Option[Duration],directories: Seq[MonitoredDirectory])
 
+// the store where FileMetaData is kept and can be retrieved from
 trait FileMetaDataStore {
   def get(path:String) : Option[FileMetaData]
   def set(path:String, fileMetaData: FileMetaData)

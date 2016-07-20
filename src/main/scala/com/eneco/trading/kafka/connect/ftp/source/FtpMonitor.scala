@@ -6,7 +6,7 @@ import java.time.{Duration, Instant}
 import java.util
 
 import org.apache.commons.codec.digest.DigestUtils
-import org.apache.commons.net.ftp.{FTPClient, FTPFile}
+import org.apache.commons.net.ftp.{FTPReply, FTPClient, FTPFile}
 
 import scala.util.{Failure, Success, Try}
 
@@ -139,12 +139,19 @@ class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) ext
   def connectFtp(): Try[FTPClient] = {
     if (!ftp.isConnected) {
       ftp.connect(settings.host)
-      println(ftp.getReplyString)
-      ftp.login(settings.user, settings.pass)
-      println(ftp.getReplyString)
-      if (!ftp.isConnected) {
-        Failure(new Exception("cannot connect ftp TODO"))
+      if (!FTPReply.isPositiveCompletion(ftp.getReplyCode)) {
+        ftp.disconnect()
+        return Failure(new Exception(s"cannot connect to ftp: ${ftp.getReplyCode}: ${ftp.getReplyString}"))
       }
+      ftp.login(settings.user, settings.pass)
+      if (!FTPReply.isPositiveCompletion(ftp.getReplyCode)) {
+        ftp.disconnect()
+        return Failure(new Exception(s"cannot login to ftp: ${ftp.getReplyCode}: ${ftp.getReplyString}"))
+      }
+      if (!ftp.isConnected) {
+        return Failure(new Exception("cannot connect to ftp because of some unreported error"))
+      }
+      log.info("successfully connected to the ftp server and logged in")
     }
     Success(ftp)
   }

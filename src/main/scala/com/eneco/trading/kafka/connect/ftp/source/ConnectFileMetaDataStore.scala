@@ -46,7 +46,7 @@ class ConnectFileMetaDataStore(c: SourceTaskContext) extends FileMetaDataStore w
     )
   }
 
-  def fileMetasToConnectOffset(meta: FileMetaData) = {
+  def fileMetasToConnectOffset(meta: FileMetaData): util.Map[String, Any] = {
     Map("size" -> meta.attribs.size,
       "timestamp" -> meta.attribs.timestamp.toEpochMilli,
       "hash" -> meta.hash,

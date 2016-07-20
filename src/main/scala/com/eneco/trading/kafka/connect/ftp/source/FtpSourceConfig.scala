@@ -8,6 +8,13 @@ import scala.collection.JavaConverters._
 
 case class MonitorConfig(topic:String, path:String, tail:Boolean)
 
+object KeyStyle extends Enumeration {
+  type KeyStyle = Value
+  val String = Value(FtpSourceConfig.StringKeyStyle)
+  val Struct = Value(FtpSourceConfig.StructKeyStyle)
+}
+import KeyStyle._
+
 object FtpSourceConfig {
   val Address = "ftp.address"
   val User = "ftp.user"
@@ -16,6 +23,9 @@ object FtpSourceConfig {
   val MonitorTail = "ftp.monitor.tail"
   val MonitorUpdate = "ftp.monitor.update"
   val FileMaxAge = "ftp.file.maxage"
+  val KeyStyle = "ftp.keystyle"
+  val StringKeyStyle = "string"
+  val StructKeyStyle = "struct"
 
   val definition: ConfigDef = new ConfigDef()
     .define(Address, Type.STRING, Importance.HIGH, "ftp address")
@@ -25,14 +35,18 @@ object FtpSourceConfig {
     .define(FileMaxAge, Type.STRING, Importance.HIGH, "ignore files older than this; ISO8601 duration")
     .define(MonitorTail, Type.LIST, Importance.HIGH, "comma separated lists of path:destinationtopic; tail of file is tracked")
     .define(MonitorUpdate, Type.LIST, Importance.HIGH, "comma separated lists of path:destinationtopic; whole file is tracked")
+    .define(KeyStyle,Type.STRING,Importance.HIGH,s"what the output key is set to: `${StringKeyStyle}` => filename; `${StructKeyStyle}` => structure with filename and offset")
 }
 
 class FtpSourceConfig(props: util.Map[String, String])
   extends AbstractConfig(FtpSourceConfig.definition, props) {
 
+  // don't leak our ugly config!
   def ftpMonitorConfigs(): Seq[MonitorConfig] = {
     lazy val topicPathRegex = "([^:]*):(.*)".r
     getList(FtpSourceConfig.MonitorTail).asScala.map { case topicPathRegex(path, topic) => MonitorConfig(topic,path,true) } ++
     getList(FtpSourceConfig.MonitorUpdate).asScala.map { case topicPathRegex(path, topic) => MonitorConfig(topic,path,false) }
   }
+
+  def keyStyle(): KeyStyle = KeyStyle.values.find(_.toString.toLowerCase == getString(FtpSourceConfig.KeyStyle)).get
 }

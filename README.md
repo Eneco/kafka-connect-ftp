@@ -25,17 +25,23 @@ ftp.address=localhost
 ftp.user=ftp
 ftp.password=ftp
 
-#refresh rate ISO8601 duration
+#refresh rate. Java's crippled ISO8601 duration
 ftp.refresh=PT5S
 
-#ignore files older than ISO8601 duration
-ftp.file.maxage=P7D
+#ignore files older than this. Java's crippled ISO8601 duration
+ftp.file.maxage=P14D
 
 #comma separated lists of path:destinationtopic
 #only yield the tail of these files
 ftp.monitor.tail=/appending/:ftp-appends,/logs/:ftp-logs
 #yield the entire content of these files
 ftp.monitor.update=/replacing/:ftp-updates
+
+#keystyle controls the format of the key and can be string or struct.
+#string only provides the file name
+#struct provides a structure with the filename and offset
+ftp.keystyle=struct
+
 ```
 
 

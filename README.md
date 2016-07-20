@@ -1,6 +1,8 @@
 Kafka Connect FTP
 =================
 
+[![Build Status](https://travis-ci.org/Eneco/kafka-connect-ftp.svg?branch=master)](https://travis-ci.org/Eneco/kafka-connect-ftp)
+
 Monitors files on an FTP server and feeds changes into Kafka.
 
 Status: WIP. Immature, naive, convoluted, happy path only.

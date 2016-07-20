@@ -46,76 +46,78 @@ object SourceRecordProducers {
   }
 }
 
-class FtpSourceTask extends SourceTask with Logging {
-  var ftpMonitor: Option[FtpMonitor] = None
+// bridges between the Connect reality and the (agnostic) FtpMonitor reality.
+// logic could have been in FtpSourceTask directly, but FtpSourceTask's imperative nature made things a bit ugly,
+// from a Scala perspective.
+class FtpSourcePoller(cfg: FtpSourceConfig, context: SourceTaskContext) extends Logging {
   var lastPoll = Instant.EPOCH
-  var pollDuration = Duration.ofSeconds(Long.MaxValue)
-  var metaStore:Option[ConnectFileMetaDataStore] = None
-  var monitor2topic = Map[MonitoredDirectory, String]()
-  var recordMaker:SourceRecordProducer = SourceRecordProducers.stringKeyRecord
 
-  override def initialize(context: SourceTaskContext ) {
-    metaStore = Some(new ConnectFileMetaDataStore(context))
-    super.initialize(context)
+  val metaStore = new ConnectFileMetaDataStore(context)
+
+  val monitor2topic = cfg.ftpMonitorConfigs()
+    .map(monitorCfg => (MonitoredDirectory(monitorCfg.path, ".*", monitorCfg.tail), monitorCfg.topic)).toMap
+
+  val pollDuration = Duration.parse(cfg.getString(FtpSourceConfig.RefreshRate))
+
+  val ftpMonitor = new FtpMonitor(
+    FtpMonitorSettings(
+      cfg.getString(FtpSourceConfig.Address),
+      cfg.getString(FtpSourceConfig.User),
+      cfg.getPassword(FtpSourceConfig.Password).value,
+      Some(Duration.parse(cfg.getString(FtpSourceConfig.FileMaxAge))),
+      monitor2topic.keys.toSeq),
+    metaStore)
+
+  val recordMaker:SourceRecordProducer = cfg.keyStyle match {
+    case KeyStyle.String => SourceRecordProducers.stringKeyRecord
+    case KeyStyle.Struct => SourceRecordProducers.structKeyRecord
   }
 
-  override def stop (): Unit = {
+  def poll(): Seq[SourceRecord] = {
+    if (Instant.now.isAfter(lastPoll.plus(pollDuration))) {
+      log.info("poll")
+      ftpMonitor.poll() match {
+        case Success(fileChanges) =>
+          lastPoll = Instant.now
+          fileChanges.map { case (meta, body, w) =>
+            log.info(s"got some fileChanges: ${meta.attribs.path}")
+            metaStore.set(meta.attribs.path, meta)
+            val topic = monitor2topic.get(w).get
+            recordMaker(metaStore, topic, meta, body)
+          }
+        case Failure(err) =>
+          log.warn(s"ftp monitor says no: ${err}")
+          Seq[SourceRecord]()
+      }
+    } else {
+      Thread.sleep(1000)
+      Seq[SourceRecord]()
+    }
+  }
+}
+
+class FtpSourceTask extends SourceTask with Logging {
+  var poller: Option[FtpSourcePoller] = None
+
+  override def stop(): Unit = {
     log.info("stop")
+    poller = None
   }
 
   override def start(props: util.Map[String, String]): Unit = {
-    require(metaStore.isDefined) // TODO
-    val Some(store) = metaStore
+    log.info("start")
     val sourceConfig = new FtpSourceConfig(props)
     sourceConfig.ftpMonitorConfigs.foreach(cfg => {
       val style = if (cfg.tail) "tail" else "updates"
       log.info(s"config tells us to track the ${style} of files in `${cfg.path}` to topic `${cfg.topic}")
     })
-
-    monitor2topic = sourceConfig.ftpMonitorConfigs().map(cfg => (MonitoredDirectory(cfg.path, ".*", cfg.tail), cfg.topic)).toMap
-
-    pollDuration = Duration.parse(sourceConfig.getString(FtpSourceConfig.RefreshRate))
-
-    ftpMonitor = Some(new FtpMonitor(
-      FtpMonitorSettings(
-        sourceConfig.getString(FtpSourceConfig.Address),
-        sourceConfig.getString(FtpSourceConfig.User),
-        sourceConfig.getPassword(FtpSourceConfig.Password).value,
-        Some(Duration.parse(sourceConfig.getString(FtpSourceConfig.FileMaxAge))),
-        monitor2topic.keys.toSeq),
-      store))
-
-    recordMaker = sourceConfig.keyStyle match {
-      case KeyStyle.String => SourceRecordProducers.stringKeyRecord
-      case KeyStyle.Struct => SourceRecordProducers.structKeyRecord
-    }
+    poller = Some(new FtpSourcePoller(sourceConfig, context))
   }
 
   override def version(): String = getClass.getPackage.getImplementationVersion
 
-  override def poll(): util.List[SourceRecord] = {
-    log.info("poll")
-    require(metaStore.isDefined) // TODO
-    val Some(store) = metaStore
-    ftpMonitor match {
-      case Some(ftp) if Instant.now.isAfter(lastPoll.plus(pollDuration)) =>
-        ftp.poll() match {
-          case Success(fileChanges) =>
-            lastPoll = Instant.now
-            fileChanges.map { case (meta, body, w) =>
-              log.info(s"got some fileChanges: ${meta.attribs.path}")
-              store.set(meta.attribs.path, meta)
-              val topic = monitor2topic.get(w).get
-              recordMaker(store,topic,meta,body)
-            }.asJava
-          case Failure(err) =>
-            Seq[SourceRecord]().asJava
-        }
-      case Some(ftp) =>
-        Thread.sleep(1000)
-        Seq[SourceRecord]().asJava
-      case None => throw new ConnectException("not initialised")
-    }
+  override def poll(): util.List[SourceRecord] = poller match {
+    case Some(poller) => poller.poll().asJava
+    case None => throw new ConnectException("FtpSourceTask is not initialized but it is polled")
   }
 }
-

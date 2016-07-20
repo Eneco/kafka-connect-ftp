@@ -23,8 +23,8 @@ object FtpSourceConfig {
     .define(Password, Type.PASSWORD, Importance.HIGH, "ftp password to login")
     .define(RefreshRate, Type.STRING, Importance.HIGH, "how often the ftp server is polled; ISO8601 duration")
     .define(FileMaxAge, Type.STRING, Importance.HIGH, "ignore files older than this; ISO8601 duration")
-    .define(MonitorTail, Type.LIST, Importance.HIGH, "TODO")
-    .define(MonitorUpdate, Type.LIST, Importance.HIGH, "TODO")
+    .define(MonitorTail, Type.LIST, Importance.HIGH, "comma separated lists of path:destinationtopic; tail of file is tracked")
+    .define(MonitorUpdate, Type.LIST, Importance.HIGH, "comma separated lists of path:destinationtopic; whole file is tracked")
 }
 
 class FtpSourceConfig(props: util.Map[String, String])

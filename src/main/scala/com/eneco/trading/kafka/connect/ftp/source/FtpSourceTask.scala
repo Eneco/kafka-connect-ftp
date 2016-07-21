@@ -7,6 +7,7 @@ import com.eneco.trading.kafka.connect.ftp.source.SourceRecordProducers.SourceRe
 import org.apache.kafka.connect.data.{Struct, SchemaBuilder, Schema}
 import org.apache.kafka.connect.errors.ConnectException
 import org.apache.kafka.connect.source.{SourceRecord, SourceTask, SourceTaskContext}
+import org.apache.kafka.connect.storage.OffsetStorageReader
 
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success}
@@ -49,10 +50,10 @@ object SourceRecordProducers {
 // bridges between the Connect reality and the (agnostic) FtpMonitor reality.
 // logic could have been in FtpSourceTask directly, but FtpSourceTask's imperative nature made things a bit ugly,
 // from a Scala perspective.
-class FtpSourcePoller(cfg: FtpSourceConfig, context: SourceTaskContext) extends Logging {
+class FtpSourcePoller(cfg: FtpSourceConfig, offsetStorage: OffsetStorageReader) extends Logging {
   var lastPoll = Instant.EPOCH
 
-  val metaStore = new ConnectFileMetaDataStore(context)
+  val metaStore = new ConnectFileMetaDataStore(offsetStorage)
 
   val monitor2topic = cfg.ftpMonitorConfigs()
     .map(monitorCfg => (MonitoredDirectory(monitorCfg.path, ".*", monitorCfg.tail), monitorCfg.topic)).toMap
@@ -111,7 +112,7 @@ class FtpSourceTask extends SourceTask with Logging {
       val style = if (cfg.tail) "tail" else "updates"
       log.info(s"config tells us to track the ${style} of files in `${cfg.path}` to topic `${cfg.topic}")
     })
-    poller = Some(new FtpSourcePoller(sourceConfig, context))
+    poller = Some(new FtpSourcePoller(sourceConfig, context.offsetStorageReader))
   }
 
   override def version(): String = getClass.getPackage.getImplementationVersion

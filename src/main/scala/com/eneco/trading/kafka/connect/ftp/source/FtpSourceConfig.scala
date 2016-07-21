@@ -38,14 +38,15 @@ object FtpSourceConfig {
     .define(KeyStyle,Type.STRING,Importance.HIGH,s"what the output key is set to: `${StringKeyStyle}` => filename; `${StructKeyStyle}` => structure with filename and offset")
 }
 
+// abstracts the properties away a bit
 class FtpSourceConfig(props: util.Map[String, String])
   extends AbstractConfig(FtpSourceConfig.definition, props) {
 
   // don't leak our ugly config!
   def ftpMonitorConfigs(): Seq[MonitorConfig] = {
     lazy val topicPathRegex = "([^:]*):(.*)".r
-    getList(FtpSourceConfig.MonitorTail).asScala.map { case topicPathRegex(path, topic) => MonitorConfig(topic,path,true) } ++
-    getList(FtpSourceConfig.MonitorUpdate).asScala.map { case topicPathRegex(path, topic) => MonitorConfig(topic,path,false) }
+    getList(FtpSourceConfig.MonitorTail).asScala.map { case topicPathRegex(path, topic) => MonitorConfig(topic, path, tail = true) } ++
+      getList(FtpSourceConfig.MonitorUpdate).asScala.map { case topicPathRegex(path, topic) => MonitorConfig(topic, path, tail = false) }
   }
 
   def keyStyle(): KeyStyle = KeyStyle.values.find(_.toString.toLowerCase == getString(FtpSourceConfig.KeyStyle)).get

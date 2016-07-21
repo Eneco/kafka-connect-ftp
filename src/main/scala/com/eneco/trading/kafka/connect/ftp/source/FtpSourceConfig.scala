@@ -28,7 +28,7 @@ object FtpSourceConfig {
   val StructKeyStyle = "struct"
 
   val definition: ConfigDef = new ConfigDef()
-    .define(Address, Type.STRING, Importance.HIGH, "ftp address")
+    .define(Address, Type.STRING, Importance.HIGH, "ftp address[:port]")
     .define(User, Type.STRING, Importance.HIGH, "ftp user name to login")
     .define(Password, Type.PASSWORD, Importance.HIGH, "ftp password to login")
     .define(RefreshRate, Type.STRING, Importance.HIGH, "how often the ftp server is polled; ISO8601 duration")
@@ -47,6 +47,12 @@ class FtpSourceConfig(props: util.Map[String, String])
     lazy val topicPathRegex = "([^:]*):(.*)".r
     getList(FtpSourceConfig.MonitorTail).asScala.map { case topicPathRegex(path, topic) => MonitorConfig(topic, path, tail = true) } ++
       getList(FtpSourceConfig.MonitorUpdate).asScala.map { case topicPathRegex(path, topic) => MonitorConfig(topic, path, tail = false) }
+  }
+
+  def address(): (String, Option[Int]) = {
+    lazy val hostIpRegex = "([^:]*):?([0-9]*)".r
+    val hostIpRegex(host, port) = getString(FtpSourceConfig.Address)
+    (host, if (port.isEmpty) None else Some(port.toInt))
   }
 
   def keyStyle(): KeyStyle = KeyStyle.values.find(_.toString.toLowerCase == getString(FtpSourceConfig.KeyStyle)).get

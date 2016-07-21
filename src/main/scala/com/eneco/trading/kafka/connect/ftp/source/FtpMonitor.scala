@@ -41,7 +41,7 @@ case class MonitoredDirectory(directory:String, filenameRegex:String, tail:Boole
 case class FileBody(bytes:Array[Byte], offset:Long)
 
 // instructs the FtpMonitor how to do its things
-case class FtpMonitorSettings(host:String, user:String, pass:String, maxAge: Option[Duration],directories: Seq[MonitoredDirectory])
+case class FtpMonitorSettings(host:String, port:Option[Int], user:String, pass:String, maxAge: Option[Duration],directories: Seq[MonitoredDirectory])
 
 // the store where FileMetaData is kept and can be retrieved from
 trait FileMetaDataStore {
@@ -138,7 +138,10 @@ class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) ext
   // TODO
   def connectFtp(): Try[FTPClient] = {
     if (!ftp.isConnected) {
-      ftp.connect(settings.host)
+      settings.port match {
+        case Some(explicitPort) => ftp.connect(settings.host, explicitPort)
+        case None => ftp.connect(settings.host)
+      }
       if (!FTPReply.isPositiveCompletion(ftp.getReplyCode)) {
         ftp.disconnect()
         return Failure(new Exception(s"cannot connect to ftp: ${ftp.getReplyCode}: ${ftp.getReplyString}"))

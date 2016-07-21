@@ -60,14 +60,16 @@ class FtpSourcePoller(cfg: FtpSourceConfig, offsetStorage: OffsetStorageReader) 
 
   val pollDuration = Duration.parse(cfg.getString(FtpSourceConfig.RefreshRate))
 
-  val ftpMonitor = new FtpMonitor(
+  val ftpMonitor = {val (host,optPort) = cfg.address
+    new FtpMonitor(
     FtpMonitorSettings(
-      cfg.getString(FtpSourceConfig.Address),
+      host,
+      optPort,
       cfg.getString(FtpSourceConfig.User),
       cfg.getPassword(FtpSourceConfig.Password).value,
       Some(Duration.parse(cfg.getString(FtpSourceConfig.FileMaxAge))),
       monitor2topic.keys.toSeq),
-    metaStore)
+    metaStore)}
 
   val recordMaker:SourceRecordProducer = cfg.keyStyle match {
     case KeyStyle.String => SourceRecordProducers.stringKeyRecord

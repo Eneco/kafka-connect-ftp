@@ -4,9 +4,9 @@ import java.time.{Duration, Instant}
 import java.util
 
 import com.eneco.trading.kafka.connect.ftp.source.SourceRecordProducers.SourceRecordProducer
-import org.apache.kafka.connect.data.{Struct, SchemaBuilder, Schema}
+import org.apache.kafka.connect.data.{Schema, SchemaBuilder, Struct}
 import org.apache.kafka.connect.errors.ConnectException
-import org.apache.kafka.connect.source.{SourceRecord, SourceTask, SourceTaskContext}
+import org.apache.kafka.connect.source.{SourceRecord, SourceTask}
 import org.apache.kafka.connect.storage.OffsetStorageReader
 
 import scala.collection.JavaConverters._

@@ -4,6 +4,7 @@ import java.util
 
 import org.apache.kafka.common.config.ConfigDef.{Importance, Type}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
+
 import scala.collection.JavaConverters._
 
 case class MonitorConfig(topic:String, path:String, tail:Boolean)
@@ -13,7 +14,7 @@ object KeyStyle extends Enumeration {
   val String = Value(FtpSourceConfig.StringKeyStyle)
   val Struct = Value(FtpSourceConfig.StructKeyStyle)
 }
-import KeyStyle._
+import com.eneco.trading.kafka.connect.ftp.source.KeyStyle._
 
 object FtpSourceConfig {
   val Address = "ftp.address"

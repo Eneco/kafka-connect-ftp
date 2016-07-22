@@ -6,7 +6,7 @@ import java.time.{Duration, Instant}
 import java.util
 
 import org.apache.commons.codec.digest.DigestUtils
-import org.apache.commons.net.ftp.{FTP, FTPReply, FTPClient, FTPFile}
+import org.apache.commons.net.ftp.{FTP, FTPClient, FTPFile, FTPReply}
 
 import scala.util.{Failure, Success, Try}
 

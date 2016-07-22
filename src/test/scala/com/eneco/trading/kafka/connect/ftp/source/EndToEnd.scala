@@ -4,10 +4,12 @@ import java.nio.file.Path
 import java.util
 
 import better.files._
+import com.eneco.trading.kafka.connect.ftp.source.KeyStyle.KeyStyle
 import org.apache.ftpserver.listener.ListenerFactory
 import org.apache.ftpserver.usermanager.PropertiesUserManagerFactory
 import org.apache.ftpserver.usermanager.impl.BaseUser
 import org.apache.ftpserver.{FtpServer, FtpServerFactory}
+import org.apache.kafka.connect.data.Struct
 import org.apache.kafka.connect.source.SourceRecord
 import org.apache.kafka.connect.storage.OffsetStorageReader
 import org.scalatest.{BeforeAndAfter, FunSuite, Matchers}
@@ -65,6 +67,12 @@ case class Update(body:Array[Byte]) extends FileChange
 case class Append(body:Array[Byte]) extends FileChange
 
 class FileSystem(rootDir:Path) {
+  def clear() = {
+    require(File(rootDir).isDirectory)
+    File(rootDir).clear()
+    this
+  }
+
   def file(path: String): File = {
     val realPath = rootDir.resolve("." + path)
     File(realPath.getParent).createIfNotExists(asDirectory = true)
@@ -78,8 +86,9 @@ class FileSystem(rootDir:Path) {
         Some(fn -> FileDiff(body, 0))
       }
       case Append(body) if body.length > 0 => {
+        val oldSize = if (file(fn).exists) file(fn).size else 0
         file(fn).appendBytes(body.iterator)
-        Some(fn -> FileDiff(body, 123))
+        Some(fn -> FileDiff(body, oldSize))
       }
       case _ => None
     }
@@ -87,6 +96,7 @@ class FileSystem(rootDir:Path) {
   }
 }
 
+// spins up an embedded ftp server, updates files, uses FtpSourcePoller to obtain SourceRecords which are verified
 class EndToEndTests extends FunSuite with Matchers with BeforeAndAfter with Logging {
   val sEmpty = new Array[Byte](0)
   val s0 = (0 to 255).map(_.toByte).toArray
@@ -99,62 +109,93 @@ class EndToEndTests extends FunSuite with Matchers with BeforeAndAfter with Logg
   val u0 = "/updates/u0"
   val u1 = "/updates/u1"
 
-  def validateSourceRecords(recs:Seq[SourceRecord], diffs:Seq[(String,String,FileDiff)]) = {
-    log.info(diffs.toString + " ROEL")
+  val changeSets = Seq(
+    Seq(
+      t0 -> Append(s0),
+      t1 -> Append(sEmpty),
+      u0 -> Update(s1),
+      u1 -> Update(sEmpty)),
+    Seq(
+      t0 -> Append(s1),
+      t1 -> Append(s3),
+      u0 -> Update(sEmpty),
+      u1 -> Update(s2)),
+    Seq(
+      t0 -> Append(s3),
+      u1 -> Update(s1)),
+    Seq(
+      t1 -> Append(s1),
+      u0 -> Update(s2)),
+    Seq(
+      t0 -> Append(s0),
+      t1 -> Append(s2),
+      u0 -> Update(s3),
+      u1 -> Update(s2))
+  )
+
+  val server = new EmbeddedFtpServer
+
+  val defaultConfig = Map(FtpSourceConfig.Address -> s"${server.host}:${server.port}",
+    FtpSourceConfig.User -> server.username,
+    FtpSourceConfig.Password -> server.password,
+    FtpSourceConfig.RefreshRate -> "PT0S",
+    FtpSourceConfig.MonitorTail -> "/tails/:tails",
+    FtpSourceConfig.MonitorUpdate -> "/updates/:updates",
+    FtpSourceConfig.FileMaxAge -> "P7D",
+    FtpSourceConfig.KeyStyle -> "string"
+  )
+
+  def validateSourceRecords(recs:Seq[SourceRecord], diffs:Seq[(String,String,FileDiff)], keyStyle: KeyStyle = KeyStyle.String) = {
     diffs.length shouldEqual recs.length
-    diffs.foreach{case(topic,fileName,diff) =>
-    recs.exists(rec => rec.topic() == topic && rec.key.asInstanceOf[String] == fileName && util.Arrays.equals(rec.value.asInstanceOf[Array[Byte]], diff.body)) shouldBe true
+    diffs.foreach { case (topic, fileName, diff) =>
+    val exist = keyStyle match {
+      case KeyStyle.String => recs.exists(rec => rec.topic() == topic && rec.key.asInstanceOf[String] == fileName && util.Arrays.equals(rec.value.asInstanceOf[Array[Byte]], diff.body))
+      case KeyStyle.Struct => recs.exists(rec =>
+        {
+          val keyStruct = rec.key.asInstanceOf[Struct]
+          val name = keyStruct.get("name").asInstanceOf[String]
+          val offset = keyStruct.get("offset").asInstanceOf[Long]
+          rec.topic() == topic && fileName == name && offset == diff.offset && util.Arrays.equals(rec.value.asInstanceOf[Array[Byte]], diff.body)
+        })
+    }
+      exist shouldBe true
+      log.info(s"got a source record that corresponds with the changes on ${fileName}")
     }
   }
 
-  test("happy flow") {
-    val server = new EmbeddedFtpServer
-    val fs = new FileSystem(server.rootDir)
+  val fileToTopic = Map(t0 -> "tails", t1 -> "tails", u0 -> "updates", u1 -> "updates")
 
+  test("Happy flow: file updates are properly reflected by corresponding SourceRecords with structured keys") {
+    val fs = new FileSystem(server.rootDir).clear
     server.start()
 
-    val cfg = new FtpSourceConfig(Map(FtpSourceConfig.Address -> s"${server.host}:${server.port}",
-      FtpSourceConfig.User -> server.username,
-      FtpSourceConfig.Password -> server.password,
-      FtpSourceConfig.RefreshRate -> "PT0S",
-      FtpSourceConfig.MonitorTail -> "/tails/:tails",
-      FtpSourceConfig.MonitorUpdate -> "/updates/:updates",
-      FtpSourceConfig.FileMaxAge -> "P7D",
-      FtpSourceConfig.KeyStyle -> "string"
-    ).asJava)
-    val fileToTopic = Map(t0 -> "tails", t1 -> "tails", u0 -> "updates", u1 -> "updates")
+    val cfg = new FtpSourceConfig(defaultConfig.updated(FtpSourceConfig.KeyStyle,"struct").asJava)
 
     val offsets = new DummyOffsetStorage
     val poller = new FtpSourcePoller(cfg, offsets)
     poller.poll() shouldBe empty
 
-    val changeSets = Seq(
-      Seq(
-        t0 -> Append(s0),
-        t1 -> Append(sEmpty),
-        u0 -> Update(s1),
-        u1 -> Update(sEmpty)),
-      Seq(
-        t0 -> Append(s1),
-        t1 -> Append(s3),
-        u0 -> Update(sEmpty),
-        u1 -> Update(s2)),
-      Seq(
-        t0 -> Append(s3),
-        u1 -> Update(s1)),
-      Seq(
-        t1 -> Append(s1),
-        u0 -> Update(s2)),
-      Seq(
-        t0 -> Append(s0),
-        t1 -> Append(s2),
-        u0 -> Update(s3),
-        u1 -> Update(s2))
-    )
+    changeSets.foreach(changeSet => {
+      val diffs = fs.applyChanges(changeSet)
+      validateSourceRecords(poller.poll(), diffs.map { case (f, d) => (fileToTopic(f), f, d) },keyStyle = KeyStyle.Struct)
+    })
+
+    server.stop()
+  }
+
+  test("Happy flow: file updates are properly reflected by corresponding SourceRecords with stringed keys") {
+    val fs = new FileSystem(server.rootDir).clear
+    server.start()
+
+    val cfg = new FtpSourceConfig(defaultConfig.updated(FtpSourceConfig.KeyStyle,"string").asJava)
+
+    val offsets = new DummyOffsetStorage
+    val poller = new FtpSourcePoller(cfg, offsets)
+    poller.poll() shouldBe empty
 
     changeSets.foreach(changeSet => {
       val diffs = fs.applyChanges(changeSet)
-      validateSourceRecords(poller.poll(), diffs.map { case (f, d) => (fileToTopic(f), f, d) })
+      validateSourceRecords(poller.poll(), diffs.map { case (f, d) => (fileToTopic(f), f, d) },keyStyle = KeyStyle.String)
     })
 
     server.stop()

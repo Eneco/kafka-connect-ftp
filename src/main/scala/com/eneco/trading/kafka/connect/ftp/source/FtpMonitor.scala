@@ -121,7 +121,7 @@ class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) ext
       .filter(w.isFileRelevant)
       .filter { f => requiresFetch(f, knownFiles.get(f.path)) }
 
-    log.info(s"we'll be fetching ${toBeFetched.length} items")
+    log.info(s"we'll be fetching ${toBeFetched.length} items from ${w.directory} ${w.filenameRegex}")
 
     val previouslyKnown = toBeFetched.map(f => knownFiles.get(f.path))
 

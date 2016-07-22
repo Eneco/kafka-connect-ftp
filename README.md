@@ -12,7 +12,7 @@ Data Types
 
 Each Kafka record represents a file, and has the following types.
 
--   The format of the keys is configurable through `ftp.keystyle=string|struct`. It can be a `string` with the file name, or a structure with `filename: string` and `offset: long`. The offset is always `0` for files that are updated as a whole, and hence only relevant for tailed files.
+-   The format of the keys is configurable through `ftp.keystyle=string|struct`. It can be a `string` with the file name, or a `FileInfo` structure with `name: string` and `offset: long`. The offset is always `0` for files that are updated as a whole, and hence only relevant for tailed files.
 -   The values of the records contain the body of the file as `bytes`.
 
 Setup

@@ -33,8 +33,8 @@ object FtpSourceConfig {
     .define(Password, Type.PASSWORD, Importance.HIGH, "ftp password to login")
     .define(RefreshRate, Type.STRING, Importance.HIGH, "how often the ftp server is polled; ISO8601 duration")
     .define(FileMaxAge, Type.STRING, Importance.HIGH, "ignore files older than this; ISO8601 duration")
-    .define(MonitorTail, Type.LIST, Importance.HIGH, "comma separated lists of path:destinationtopic; tail of file is tracked")
-    .define(MonitorUpdate, Type.LIST, Importance.HIGH, "comma separated lists of path:destinationtopic; whole file is tracked")
+    .define(MonitorTail, Type.LIST, "", Importance.HIGH, "comma separated lists of path:destinationtopic; tail of file is tracked")
+    .define(MonitorUpdate, Type.LIST, "", Importance.HIGH, "comma separated lists of path:destinationtopic; whole file is tracked")
     .define(KeyStyle,Type.STRING,Importance.HIGH,s"what the output key is set to: `${StringKeyStyle}` => filename; `${StructKeyStyle}` => structure with filename and offset")
 }
 

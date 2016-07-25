@@ -76,18 +76,20 @@ class FtpSourcePoller(cfg: FtpSourceConfig, offsetStorage: OffsetStorageReader) 
     case KeyStyle.Struct => SourceRecordProducers.structKeyRecord
   }
 
+  val recordConverter:SourceRecordConverter = cfg.sourceRecordConverter
+
   def poll(): Seq[SourceRecord] = {
     if (Instant.now.isAfter(lastPoll.plus(pollDuration))) {
       log.info("poll")
       ftpMonitor.poll() match {
         case Success(fileChanges) =>
           lastPoll = Instant.now
-          fileChanges.map { case (meta, body, w) =>
+          fileChanges.map({ case (meta, body, w) =>
             log.info(s"got some fileChanges: ${meta.attribs.path}")
             metaStore.set(meta.attribs.path, meta)
             val topic = monitor2topic.get(w).get
             recordMaker(metaStore, topic, meta, body)
-          }
+          }).flatMap(recordConverter.convert(_).asScala)
         case Failure(err) =>
           log.warn(s"ftp monitor says no: ${err}")
           Seq[SourceRecord]()

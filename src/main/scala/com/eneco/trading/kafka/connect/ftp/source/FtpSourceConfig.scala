@@ -27,6 +27,7 @@ object FtpSourceConfig {
   val KeyStyle = "ftp.keystyle"
   val StringKeyStyle = "string"
   val StructKeyStyle = "struct"
+  val SourceRecordConverter = "ftp.sourcerecordconverter"
 
   val definition: ConfigDef = new ConfigDef()
     .define(Address, Type.STRING, Importance.HIGH, "ftp address[:port]")
@@ -36,7 +37,8 @@ object FtpSourceConfig {
     .define(FileMaxAge, Type.STRING, Importance.HIGH, "ignore files older than this; ISO8601 duration")
     .define(MonitorTail, Type.LIST, "", Importance.HIGH, "comma separated lists of path:destinationtopic; tail of file is tracked")
     .define(MonitorUpdate, Type.LIST, "", Importance.HIGH, "comma separated lists of path:destinationtopic; whole file is tracked")
-    .define(KeyStyle,Type.STRING,Importance.HIGH,s"what the output key is set to: `${StringKeyStyle}` => filename; `${StructKeyStyle}` => structure with filename and offset")
+    .define(KeyStyle, Type.STRING, Importance.HIGH, s"what the output key is set to: `${StringKeyStyle}` => filename; `${StructKeyStyle}` => structure with filename and offset")
+    .define(SourceRecordConverter, Type.CLASS, "com.eneco.trading.kafka.connect.ftp.source.NopSourceRecordConverter", Importance.HIGH, s"TODO")
 }
 
 // abstracts the properties away a bit
@@ -57,4 +59,7 @@ class FtpSourceConfig(props: util.Map[String, String])
   }
 
   def keyStyle(): KeyStyle = KeyStyle.values.find(_.toString.toLowerCase == getString(FtpSourceConfig.KeyStyle)).get
+
+  def sourceRecordConverter(): SourceRecordConverter =
+    getConfiguredInstance(FtpSourceConfig.SourceRecordConverter, classOf[SourceRecordConverter])
 }

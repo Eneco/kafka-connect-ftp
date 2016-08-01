@@ -58,7 +58,7 @@ With `$CONFLUENT_HOME` pointing to the root of your Confluent Platform installat
 
     $CONFLUENT_HOME/bin/connect-standalone $CONFLUENT_HOME/etc/schema-registry/connect-avro-standalone.properties your.specific.properties
 
-Data Convertors
+Data Converters
 ---------------
 
 Instead of dumping whole file bodies (and the danger of exceeding Kafka's `message.max.bytes`), one might want to give an interpretation to the data contained in the files before putting it into Kafka.

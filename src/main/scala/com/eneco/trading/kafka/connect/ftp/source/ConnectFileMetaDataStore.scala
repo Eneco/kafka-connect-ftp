@@ -3,13 +3,14 @@ package com.eneco.trading.kafka.connect.ftp.source
 import java.time.Instant
 import java.util
 
+import com.typesafe.scalalogging.slf4j.StrictLogging
 import org.apache.kafka.connect.storage.OffsetStorageReader
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
 // allows storage and retrieval of meta datas into connect framework
-class ConnectFileMetaDataStore(offsetStorage: OffsetStorageReader) extends FileMetaDataStore with Logging {
+class ConnectFileMetaDataStore(offsetStorage: OffsetStorageReader) extends FileMetaDataStore with StrictLogging {
   // connect offsets aren't directly committed, hence we'll cache them
   private val cache = mutable.Map[String, FileMetaData]()
 
@@ -17,7 +18,7 @@ class ConnectFileMetaDataStore(offsetStorage: OffsetStorageReader) extends FileM
     cache.get(path).orElse(getFromStorage(path))
 
   override def set(path: String, fileMetaData: FileMetaData): Unit = {
-    log.info(s"ConnectFileMetaDataStore set ${path}")
+    logger.info(s"ConnectFileMetaDataStore set ${path}")
     cache.put(path, fileMetaData)
   }
 
@@ -25,10 +26,10 @@ class ConnectFileMetaDataStore(offsetStorage: OffsetStorageReader) extends FileM
   def getFromStorage(path: String): Option[FileMetaData] =
     offsetStorage.offset(Map("path" -> path).asJava) match {
       case null =>
-        log.trace(s"meta store storage HASN'T ${path}")
+        logger.trace(s"meta store storage HASN'T ${path}")
         None
       case o =>
-        log.info(s"meta store storage has ${path}")
+        logger.info(s"meta store storage has ${path}")
         Some(connectOffsetToFileMetas(path, o))
     }
 

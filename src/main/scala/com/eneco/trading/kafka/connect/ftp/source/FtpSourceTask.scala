@@ -8,6 +8,7 @@ import org.apache.kafka.connect.data.{Schema, SchemaBuilder, Struct}
 import org.apache.kafka.connect.errors.ConnectException
 import org.apache.kafka.connect.source.{SourceRecord, SourceTask}
 import org.apache.kafka.connect.storage.OffsetStorageReader
+import com.typesafe.scalalogging.slf4j.StrictLogging
 
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success}
@@ -50,7 +51,7 @@ object SourceRecordProducers {
 // bridges between the Connect reality and the (agnostic) FtpMonitor reality.
 // logic could have been in FtpSourceTask directly, but FtpSourceTask's imperative nature made things a bit ugly,
 // from a Scala perspective.
-class FtpSourcePoller(cfg: FtpSourceConfig, offsetStorage: OffsetStorageReader) extends Logging {
+class FtpSourcePoller(cfg: FtpSourceConfig, offsetStorage: OffsetStorageReader) extends StrictLogging {
   var lastPoll = Instant.EPOCH
 
   val metaStore = new ConnectFileMetaDataStore(offsetStorage)
@@ -80,18 +81,18 @@ class FtpSourcePoller(cfg: FtpSourceConfig, offsetStorage: OffsetStorageReader) 
 
   def poll(): Seq[SourceRecord] = {
     if (Instant.now.isAfter(lastPoll.plus(pollDuration))) {
-      log.info("poll")
+      logger.info("poll")
       ftpMonitor.poll() match {
         case Success(fileChanges) =>
           lastPoll = Instant.now
           fileChanges.map({ case (meta, body, w) =>
-            log.info(s"got some fileChanges: ${meta.attribs.path}")
+            logger.info(s"got some fileChanges: ${meta.attribs.path}")
             metaStore.set(meta.attribs.path, meta)
             val topic = monitor2topic.get(w).get
             recordMaker(metaStore, topic, meta, body)
           }).flatMap(recordConverter.convert(_).asScala)
         case Failure(err) =>
-          log.warn(s"ftp monitor says no: ${err}")
+          logger.warn(s"ftp monitor says no: ${err}")
           Seq[SourceRecord]()
       }
     } else {
@@ -101,20 +102,20 @@ class FtpSourcePoller(cfg: FtpSourceConfig, offsetStorage: OffsetStorageReader) 
   }
 }
 
-class FtpSourceTask extends SourceTask with Logging {
+class FtpSourceTask extends SourceTask with StrictLogging {
   var poller: Option[FtpSourcePoller] = None
 
   override def stop(): Unit = {
-    log.info("stop")
+    logger.info("stop")
     poller = None
   }
 
   override def start(props: util.Map[String, String]): Unit = {
-    log.info("start")
+    logger.info("start")
     val sourceConfig = new FtpSourceConfig(props)
     sourceConfig.ftpMonitorConfigs.foreach(cfg => {
       val style = if (cfg.tail) "tail" else "updates"
-      log.info(s"config tells us to track the ${style} of files in `${cfg.path}` to topic `${cfg.topic}")
+      logger.info(s"config tells us to track the ${style} of files in `${cfg.path}` to topic `${cfg.topic}")
     })
     poller = Some(new FtpSourcePoller(sourceConfig, context.offsetStorageReader))
   }

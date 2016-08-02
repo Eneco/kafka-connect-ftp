@@ -5,6 +5,7 @@ import java.util
 
 import better.files._
 import com.eneco.trading.kafka.connect.ftp.source.KeyStyle.KeyStyle
+import com.typesafe.scalalogging.slf4j.StrictLogging
 import org.apache.ftpserver.listener.ListenerFactory
 import org.apache.ftpserver.usermanager.PropertiesUserManagerFactory
 import org.apache.ftpserver.usermanager.impl.BaseUser
@@ -27,7 +28,7 @@ class DummyOffsetStorage extends OffsetStorageReader {
   }
 }
 
-class EmbeddedFtpServer extends Logging {
+class EmbeddedFtpServer extends StrictLogging {
   val username = "my-User_name7"
   val password = "=541%2@$;;'`"
   val host = "localhost"
@@ -97,7 +98,7 @@ class FileSystem(rootDir:Path) {
 }
 
 // spins up an embedded ftp server, updates files, uses FtpSourcePoller to obtain SourceRecords which are verified
-class EndToEndTests extends FunSuite with Matchers with BeforeAndAfter with Logging {
+class EndToEndTests extends FunSuite with Matchers with BeforeAndAfter with StrictLogging {
   val sEmpty = new Array[Byte](0)
   val s0 = (0 to 255).map(_.toByte).toArray
   val s1 = "Hebban olla vogala nestas hagunnan hinase hic enda thu wat unbidan we nu\r\n\t\0:)".getBytes
@@ -159,7 +160,7 @@ class EndToEndTests extends FunSuite with Matchers with BeforeAndAfter with Logg
         })
     }
       exist shouldBe true
-      log.info(s"got a source record that corresponds with the changes on ${fileName}")
+      logger.info(s"got a source record that corresponds with the changes on ${fileName}")
     }
   }
 

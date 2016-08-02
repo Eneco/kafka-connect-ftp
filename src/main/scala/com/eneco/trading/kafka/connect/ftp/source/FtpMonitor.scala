@@ -5,6 +5,7 @@ import java.nio.file.Paths
 import java.time.{Duration, Instant}
 import java.util
 
+import com.typesafe.scalalogging.slf4j.StrictLogging
 import org.apache.commons.codec.digest.DigestUtils
 import org.apache.commons.net.ftp.{FTP, FTPClient, FTPFile, FTPReply}
 
@@ -49,7 +50,7 @@ trait FileMetaDataStore {
   def set(path:String, fileMetaData: FileMetaData)
 }
 
-class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) extends Logging {
+class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) extends StrictLogging {
   val MaxAge = settings.maxAge.getOrElse(Duration.ofDays(Long.MaxValue))
 
   val ftp = new FTPClient()
@@ -64,7 +65,7 @@ class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) ext
 
   // Retrieves the FtpAbsoluteFile and returns a new or updated KnownFile
   def fetch(file: AbsoluteFtpFile, knownFile: Option[FileMetaData]): Try[FetchedFile] = {
-    log.info(s"fetch ${file.path}")
+    logger.info(s"fetch ${file.path}")
     val baos = new ByteArrayOutputStream()
     if (ftp.retrieveFile(file.path, baos)) {
       val bytes = baos.toByteArray
@@ -82,35 +83,35 @@ class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) ext
     optPreviously match {
       case Some(previously) if previously.attribs.size != current.meta.attribs.size || previously.hash != current.meta.hash =>
         // file changed in size and/or hash
-        log.info(s"fetched ${current.meta.attribs.path}, it was known before and it changed")
+        logger.info(s"fetched ${current.meta.attribs.path}, it was known before and it changed")
         if (w.tail) {
           if (current.meta.attribs.size > previously.attribs.size) {
             val hashPrevBlock = DigestUtils.sha256Hex(util.Arrays.copyOfRange(current.body, 0, previously.attribs.size.toInt))
             if (previously.hash == hashPrevBlock) {
-              log.info(s"tail ${current.meta.attribs.path} [${previously.attribs.size.toInt}, ${current.meta.attribs.size.toInt})")
+              logger.info(s"tail ${current.meta.attribs.path} [${previously.attribs.size.toInt}, ${current.meta.attribs.size.toInt})")
               val tail = util.Arrays.copyOfRange(current.body, previously.attribs.size.toInt, current.meta.attribs.size.toInt)
               (current.meta.inspectedNow().modifiedNow(), Some(FileBody(tail,previously.attribs.size)))
             } else {
-              log.warn(s"the tail of ${current.meta.attribs.path} is to be followed, but previously seen content changed. we'll provide the entire file.")
+              logger.warn(s"the tail of ${current.meta.attribs.path} is to be followed, but previously seen content changed. we'll provide the entire file.")
               (current.meta.inspectedNow().modifiedNow(), Some(FileBody(current.body,0)))
             }
           } else {
             // the file shrunk or didn't grow
-            log.warn(s"the tail of ${current.meta.attribs.path} is to be followed, but it shrunk")
+            logger.warn(s"the tail of ${current.meta.attribs.path} is to be followed, but it shrunk")
             (current.meta.inspectedNow().modifiedNow(), None)
           }
         } else { // !w.tail: we're not tailing but dumping the entire file on change
-          log.info(s"dump entire ${current.meta.attribs.path}")
+          logger.info(s"dump entire ${current.meta.attribs.path}")
           (current.meta.inspectedNow().modifiedNow(), Some(FileBody(current.body,0)))
         }
       case Some(previouslyKnownFile) =>
         // file didn't change
-        log.info(s"fetched ${current.meta.attribs.path}, it was known before and it didn't change")
+        logger.info(s"fetched ${current.meta.attribs.path}, it was known before and it didn't change")
         (current.meta.inspectedNow(), None)
       case None =>
         // file is new
-        log.info(s"fetched ${current.meta.attribs.path}, wasn't known before")
-        log.info(s"dump entire ${current.meta.attribs.path}")
+        logger.info(s"fetched ${current.meta.attribs.path}, wasn't known before")
+        logger.info(s"dump entire ${current.meta.attribs.path}")
         (current.meta.inspectedNow().modifiedNow(), Some(FileBody(current.body,0)))
     }
 
@@ -121,7 +122,7 @@ class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) ext
       .filter(w.isFileRelevant)
       .filter { f => requiresFetch(f, knownFiles.get(f.path)) }
 
-    log.info(s"we'll be fetching ${toBeFetched.length} items from ${w.directory} ${w.filenameRegex}")
+    logger.info(s"we'll be fetching ${toBeFetched.length} items from ${w.directory} ${w.filenameRegex}")
 
     val previouslyKnown = toBeFetched.map(f => knownFiles.get(f.path))
 
@@ -130,7 +131,7 @@ class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) ext
     toBeFetched zip previouslyKnown zip fetchResults map { case((a,b),c) => (a,b,c)} flatMap {
       case (ftpFile, optPrevKnown, Success(currentFile)) => Some(handleFetchedFile(w, optPrevKnown, currentFile))
       case (ftpFile, previouslyKnownFile, Failure(err)) =>
-        log.warn(s"failed to fetch ${ftpFile.path}: ${err.toString}")
+        logger.warn(s"failed to fetch ${ftpFile.path}: ${err.toString}")
         None
     }
   }
@@ -154,7 +155,7 @@ class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) ext
       if (!ftp.isConnected) {
         return Failure(new Exception("cannot connect to ftp because of some unreported error"))
       }
-      log.info("successfully connected to the ftp server and logged in")
+      logger.info("successfully connected to the ftp server and logged in")
       ftp.setFileType(FTP.BINARY_FILE_TYPE)
     }
     Success(ftp)
@@ -166,15 +167,15 @@ class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) ext
           val results: Seq[(FileMetaData, Option[FileBody])] = fetchFromMonitoredPlaces(w)
           results.flatMap {
             case (meta, Some(body)) =>
-              log.info(s"${meta.attribs.path} got @ offset ${body.offset} `" + new String(body.bytes) + "`")
+              logger.info(s"${meta.attribs.path} got @ offset ${body.offset} `" + new String(body.bytes) + "`")
               Some((meta,body, w))
             case (meta, None) =>
-              log.info(s"${meta.attribs.path} got no bytes")
+              logger.info(s"${meta.attribs.path} got no bytes")
               None
           }
         })
         Success(v)
-      case Failure(err) => log.warn(s"cannot connect to ftp: ${err.toString}")
+      case Failure(err) => logger.warn(s"cannot connect to ftp: ${err.toString}")
         Failure(err)
     }
 }

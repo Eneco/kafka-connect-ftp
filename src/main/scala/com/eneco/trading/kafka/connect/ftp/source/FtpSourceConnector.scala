@@ -11,13 +11,16 @@ import scala.collection.JavaConverters._
 import scala.util.{Failure, Try}
 
 class FtpSourceConnector extends SourceConnector with StrictLogging {
-  private var configProps : util.Map[String, String] = null
+  private var configProps : Option[util.Map[String, String]] = None
 
   override def taskClass(): Class[_ <: Task] = classOf[FtpSourceTask]
 
   override def taskConfigs(maxTasks: Int): util.List[util.Map[String, String]] = {
     logger.info(s"Setting task configurations for $maxTasks workers.")
-    (1 to maxTasks).map(_ => configProps).toList.asJava
+    configProps match {
+      case Some(props) => (1 to maxTasks).map(_ => props).toList.asJava
+      case None => throw new ConnectException("cannot provide taskConfigs without being initialised")
+    }
   }
 
   override def stop(): Unit = {
@@ -26,7 +29,7 @@ class FtpSourceConnector extends SourceConnector with StrictLogging {
 
   override def start(props: util.Map[String, String]): Unit = {
     logger.info("start")
-    configProps = props
+    configProps = Some(props)
     Try(new FtpSourceConfig(props)) match {
       case Failure(f) => throw new ConnectException("Couldn't start due to configuration error: " + f.getMessage, f)
       case _ =>

@@ -53,9 +53,7 @@
     <confluent.version>3.0.0</confluent.version>
     <kafka.version>0.10.0.0</kafka.version>
     <avro.version>1.7.7</avro.version>
-    <mockito.version>1.10.19</mockito.version>
     <scalatest.version>3.0.0-M1</scalatest.version>
-    <scalamock.version>3.2.2</scalamock.version>
     <pathikrit.version>2.16.0</pathikrit.version>
     <ftpserver.version>1.0.6</ftpserver.version>
     <commons-net.version>3.5</commons-net.version>
@@ -68,21 +66,12 @@
     <scalatest-maven-plugin.version>1.0</scalatest-maven-plugin.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <confluent.maven.repo>http://packages.confluent.io/maven/</confluent.maven.repo>
-    <cloudera.maven.repo>https://repository.cloudera.com/artifactory/cloudera-repos</cloudera.maven.repo>
   </properties>
   <repositories>
     <repository>
       <id>confluent</id>
       <name>Confluent</name>
       <url>${confluent.maven.repo}</url>
-    </repository>
-    <repository>
-      <id>cdh.repo</id>
-      <name>Cloudera Repositories</name>
-      <url>${cloudera.maven.repo}</url>
-      <snapshots>
-        <enabled>false</enabled>
-      </snapshots>
     </repository>
   </repositories>
   <dependencies>
@@ -95,18 +84,6 @@
       <groupId>org.apache.kafka</groupId>
       <artifactId>connect-api</artifactId>
       <version>${kafka.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.scalamock</groupId>
-      <artifactId>scalamock-scalatest-support_2.11</artifactId>
-      <version>${scalamock.version}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.mockito</groupId>
-      <artifactId>mockito-all</artifactId>
-      <version>${mockito.version}</version>
-      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>com.github.pathikrit</groupId>

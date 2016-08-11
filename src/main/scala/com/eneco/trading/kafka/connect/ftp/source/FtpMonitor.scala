@@ -33,7 +33,7 @@ case class AbsoluteFtpFile(ftpFile:FTPFile, parentDir:String) {
   def age(): Duration = Duration.between(ftpFile.getTimestamp.toInstant,Instant.now)
 }
 
-// tells to monitor which directory and how files are delt with, might be better a trait and is TODO
+// tells to monitor which directory and how files are dealt with, might be better a trait and is TODO
 case class MonitoredDirectory(directory:String, filenameRegex:String, tail:Boolean) {
   def isFileRelevant(f:AbsoluteFtpFile):Boolean = true // TODO use regex for file name
 }
@@ -79,6 +79,7 @@ class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) ext
     }
   }
 
+  // translates a MonitoredDirectory and previously known FileMetaData into a FileMetaData and FileBody
   def handleFetchedFile(w:MonitoredDirectory, optPreviously: Option[FileMetaData], current:FetchedFile): (FileMetaData, Option[FileBody]) =
     optPreviously match {
       case Some(previously) if previously.attribs.size != current.meta.attribs.size || previously.hash != current.meta.hash =>
@@ -115,6 +116,7 @@ class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) ext
         (current.meta.inspectedNow().modifiedNow(), Some(FileBody(current.body,0)))
     }
 
+  // fetches files from a monitored directory when needed
   def fetchFromMonitoredPlaces(w:MonitoredDirectory): Seq[(FileMetaData, Option[FileBody])] = {
     val toBeFetched = ftp.listFiles(w.directory).toSeq
       .filter(_.isFile)
@@ -123,6 +125,15 @@ class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) ext
       .filter { f => requiresFetch(f, knownFiles.get(f.path)) }
 
     logger.info(s"we'll be fetching ${toBeFetched.length} items from ${w.directory} ${w.filenameRegex}")
+    toBeFetched.foreach(f=>
+      {
+        val kf = knownFiles.get(f.path)
+        logger.info(s"we'll be fetching ${f.path} ${f.ftpFile.getSize} ${f.ftpFile.getTimestamp.toInstant} (age: ${f.age})")
+        logger.info(s"what we knew from our store of ${f.path}: " + (kf match {
+          case Some(f) => s"${f.attribs.size} ${f.attribs.timestamp}"
+          case None => "not known before"
+        }))
+      })
 
     val previouslyKnown = toBeFetched.map(f => knownFiles.get(f.path))
 
@@ -130,7 +141,7 @@ class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) ext
 
     toBeFetched zip previouslyKnown zip fetchResults map { case((a,b),c) => (a,b,c)} flatMap {
       case (ftpFile, optPrevKnown, Success(currentFile)) => Some(handleFetchedFile(w, optPrevKnown, currentFile))
-      case (ftpFile, previouslyKnownFile, Failure(err)) =>
+      case (ftpFile, _, Failure(err)) =>
         logger.warn(s"failed to fetch ${ftpFile.path}: ${err.toString}")
         None
     }
@@ -167,7 +178,7 @@ class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) ext
           val results: Seq[(FileMetaData, Option[FileBody])] = fetchFromMonitoredPlaces(w)
           results.flatMap {
             case (meta, Some(body)) =>
-              logger.info(s"${meta.attribs.path} got @ offset ${body.offset} `" + new String(body.bytes) + "`")
+              logger.info(s"${meta.attribs.path} got @ offset ${body.offset}")
               Some((meta,body, w))
             case (meta, None) =>
               logger.info(s"${meta.attribs.path} got no bytes")

@@ -22,11 +22,11 @@ class ConnectFileMetaDataStore(offsetStorage: OffsetStorageReader) extends FileM
     cache.put(path, fileMetaData)
   }
 
-  // cache couldn't provide us the info
+  // cache couldn't provide us the info. this is a rather expensive operation (?)
   def getFromStorage(path: String): Option[FileMetaData] =
     offsetStorage.offset(Map("path" -> path).asJava) match {
       case null =>
-        logger.trace(s"meta store storage HASN'T ${path}")
+        logger.info(s"meta store storage HASN'T ${path}")
         None
       case o =>
         logger.info(s"meta store storage has ${path}")

@@ -15,7 +15,11 @@ class ConnectFileMetaDataStore(offsetStorage: OffsetStorageReader) extends FileM
   private val cache = mutable.Map[String, FileMetaData]()
 
   override def get(path: String): Option[FileMetaData] =
-    cache.get(path).orElse(getFromStorage(path))
+    cache.get(path).orElse({
+      val stored = getFromStorage(path)
+      stored.foreach(set(path,_))
+      stored
+    })
 
   override def set(path: String, fileMetaData: FileMetaData): Unit = {
     logger.info(s"ConnectFileMetaDataStore set ${path}")

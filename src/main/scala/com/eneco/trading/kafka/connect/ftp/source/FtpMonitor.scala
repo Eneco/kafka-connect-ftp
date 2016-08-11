@@ -122,7 +122,8 @@ class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) ext
       .filter(_.isFile)
       .map(AbsoluteFtpFile(_, w.directory))
       .filter(w.isFileRelevant)
-      .filter { f => requiresFetch(f, knownFiles.get(f.path)) }
+      .filter(f => !MaxAge.minus(f.age).isNegative) // TODO quick HACK: potentially avoid requiresFetch to avoid slow ConnectFileMetaDataStore
+      .filter{ f => requiresFetch(f, knownFiles.get(f.path)) }
 
     logger.info(s"we'll be fetching ${toBeFetched.length} items from ${w.directory} ${w.filenameRegex}")
     toBeFetched.foreach(f=>

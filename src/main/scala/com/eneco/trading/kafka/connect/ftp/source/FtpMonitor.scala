@@ -116,14 +116,30 @@ class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) ext
         (current.meta.inspectedNow().modifiedNow(), Some(FileBody(current.body,0)))
     }
 
+  def debugLogFiles(files:Seq[FTPFile], w:MonitoredDirectory): Unit = files.foreach(f =>
+      {
+        logger.debug(s"${f}")
+        logger.debug(s"${f.getName} is file: ${f.isFile}")
+        if (f.isFile) {
+          val abs = AbsoluteFtpFile(f, w.directory)
+          logger.debug(s"${f.getName} is relevant according to search pattern: ${w.isFileRelevant(abs)}")
+          logger.debug(s"${f.getName} age is ${abs.age}; MaxAge is ${MaxAge}")
+        }
+      }
+    )
+
+
   // fetches files from a monitored directory when needed
   def fetchFromMonitoredPlaces(w:MonitoredDirectory): Seq[(FileMetaData, Option[FileBody])] = {
-    val toBeFetched = ftp.listFiles(w.directory).toSeq
+    val files = ftp.listFiles(w.directory).toSeq
+    val toBeFetched = files
       .filter(_.isFile)
       .map(AbsoluteFtpFile(_, w.directory))
       .filter(w.isFileRelevant)
       .filter(f => !MaxAge.minus(f.age).isNegative) // TODO quick HACK: potentially avoid requiresFetch to avoid slow ConnectFileMetaDataStore
       .filter{ f => requiresFetch(f, knownFiles.get(f.path)) }
+
+    debugLogFiles(files, w)
 
     logger.info(s"we'll be fetching ${toBeFetched.length} items from ${w.directory} ${w.filenameRegex}")
     toBeFetched.foreach(f=>

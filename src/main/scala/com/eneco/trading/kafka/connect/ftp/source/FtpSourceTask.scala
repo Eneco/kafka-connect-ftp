@@ -52,14 +52,15 @@ object SourceRecordProducers {
 // logic could have been in FtpSourceTask directly, but FtpSourceTask's imperative nature made things a bit ugly,
 // from a Scala perspective.
 class FtpSourcePoller(cfg: FtpSourceConfig, offsetStorage: OffsetStorageReader) extends StrictLogging {
-  var lastPoll = Instant.EPOCH
-
   val metaStore = new ConnectFileMetaDataStore(offsetStorage)
 
   val monitor2topic = cfg.ftpMonitorConfigs()
     .map(monitorCfg => (MonitoredDirectory(monitorCfg.path, ".*", monitorCfg.tail), monitorCfg.topic)).toMap
 
   val pollDuration = Duration.parse(cfg.getString(FtpSourceConfig.RefreshRate))
+  val maxBackoff = Duration.parse(cfg.getString(FtpSourceConfig.MaxBackoff))
+
+  var backoff = new ExponentialBackOff(pollDuration, maxBackoff)
 
   val ftpMonitor = {val (host,optPort) = cfg.address
     new FtpMonitor(
@@ -80,19 +81,21 @@ class FtpSourcePoller(cfg: FtpSourceConfig, offsetStorage: OffsetStorageReader) 
   val recordConverter:SourceRecordConverter = cfg.sourceRecordConverter
 
   def poll(): Seq[SourceRecord] = {
-    if (Instant.now.isAfter(lastPoll.plus(pollDuration))) {
+    if (backoff.passed) {
       logger.info("poll")
       ftpMonitor.poll() match {
         case Success(fileChanges) =>
-          lastPoll = Instant.now
+          backoff = backoff.nextSuccess
           fileChanges.map({ case (meta, body, w) =>
             logger.info(s"got some fileChanges: ${meta.attribs.path}")
             metaStore.set(meta.attribs.path, meta)
-            val topic = monitor2topic.get(w).get
+            val topic = monitor2topic(w)
             recordMaker(metaStore, topic, meta, body)
           }).flatMap(recordConverter.convert(_).asScala)
         case Failure(err) =>
-          logger.warn(s"ftp monitor says no: ${err}")
+          logger.warn(s"ftp monitor failed: $err")
+          backoff = backoff.nextFailure
+          logger.info(s"let's backoff ${backoff.remaining}")
           Seq[SourceRecord]()
       }
     } else {

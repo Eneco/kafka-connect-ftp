@@ -164,8 +164,8 @@ class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) ext
     }
   }
 
-  // TODO
   def connectFtp(): Try[FTPClient] = {
+    ftp.disconnect() // TODO: maybe we should keep the connection open. However, the underlying ftp client is a major PITA and this is way easier.
     if (!ftp.isConnected) {
       settings.port match {
         case Some(explicitPort) => ftp.connect(settings.host, explicitPort)
@@ -189,7 +189,7 @@ class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) ext
     Success(ftp)
   }
 
-  def poll(): Try[Seq[(FileMetaData, FileBody, MonitoredDirectory)]] = connectFtp() match {
+  def poll(): Try[Seq[(FileMetaData, FileBody, MonitoredDirectory)]] = Try(connectFtp() match {
       case Success(_) =>
         val v = settings.directories.flatMap(w => {
           val results: Seq[(FileMetaData, Option[FileBody])] = fetchFromMonitoredPlaces(w)
@@ -205,5 +205,5 @@ class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) ext
         Success(v)
       case Failure(err) => logger.warn(s"cannot connect to ftp: ${err.toString}")
         Failure(err)
-    }
+    }).flatten
 }

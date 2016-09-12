@@ -20,6 +20,7 @@ object FtpSourceConfig {
   val Address = "ftp.address"
   val User = "ftp.user"
   val Password = "ftp.password"
+  val MaxBackoff = "ftp.max.backoff"
   val RefreshRate = "ftp.refresh"
   val MonitorTail = "ftp.monitor.tail"
   val MonitorUpdate = "ftp.monitor.update"
@@ -34,6 +35,7 @@ object FtpSourceConfig {
     .define(User, Type.STRING, Importance.HIGH, "ftp user name to login")
     .define(Password, Type.PASSWORD, Importance.HIGH, "ftp password to login")
     .define(RefreshRate, Type.STRING, Importance.HIGH, "how often the ftp server is polled; ISO8601 duration")
+    .define(MaxBackoff, Type.STRING,"PT30M", Importance.HIGH, "on failure, exponentially backoff to at most this ISO8601 duration")
     .define(FileMaxAge, Type.STRING, Importance.HIGH, "ignore files older than this; ISO8601 duration")
     .define(MonitorTail, Type.LIST, "", Importance.HIGH, "comma separated lists of path:destinationtopic; tail of file is tracked")
     .define(MonitorUpdate, Type.LIST, "", Importance.HIGH, "comma separated lists of path:destinationtopic; whole file is tracked")

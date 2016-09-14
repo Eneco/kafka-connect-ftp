@@ -55,7 +55,7 @@ class FtpSourcePoller(cfg: FtpSourceConfig, offsetStorage: OffsetStorageReader) 
   val metaStore = new ConnectFileMetaDataStore(offsetStorage)
 
   val monitor2topic = cfg.ftpMonitorConfigs()
-    .map(monitorCfg => (MonitoredDirectory(monitorCfg.path, ".*", monitorCfg.tail), monitorCfg.topic)).toMap
+    .map(monitorCfg => (MonitoredPath(monitorCfg.path, monitorCfg.tail), monitorCfg.topic)).toMap
 
   val pollDuration = Duration.parse(cfg.getString(FtpSourceConfig.RefreshRate))
   val maxBackoff = Duration.parse(cfg.getString(FtpSourceConfig.MaxBackoff))

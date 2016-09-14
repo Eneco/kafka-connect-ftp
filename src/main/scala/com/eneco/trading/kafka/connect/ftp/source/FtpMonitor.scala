@@ -1,7 +1,7 @@
 package com.eneco.trading.kafka.connect.ftp.source
 
 import java.io.ByteArrayOutputStream
-import java.nio.file.Paths
+import java.nio.file.{FileSystem, FileSystems, Paths}
 import java.time.{Duration, Instant}
 import java.util
 
@@ -34,15 +34,28 @@ case class AbsoluteFtpFile(ftpFile:FTPFile, parentDir:String) {
 }
 
 // tells to monitor which directory and how files are dealt with, might be better a trait and is TODO
-case class MonitoredDirectory(directory:String, filenameRegex:String, tail:Boolean) {
-  def isFileRelevant(f:AbsoluteFtpFile):Boolean = true // TODO use regex for file name
+case class MonitoredPath(path:String, tail:Boolean) {
+  val p = Paths.get(if (path.endsWith("/")) path + "*" else path)
+
+  val pattern = p.getFileName.toString  // glob
+  val baseDirectory:String = p.getParent.toString match {
+    case pp if pp.endsWith("/") => pp
+    case pp => pp + "/"
+  }
+
+  def isFileRelevant(path:String):Boolean = {
+    val g = s"glob:$baseDirectory$pattern"
+    FileSystems.getDefault.getPathMatcher(g).matches(Paths.get(path))
+  }
+
+  def isFileRelevant(f:AbsoluteFtpFile):Boolean = isFileRelevant(f.path)
 }
 
 // a potential partial file
 case class FileBody(bytes:Array[Byte], offset:Long)
 
 // instructs the FtpMonitor how to do its things
-case class FtpMonitorSettings(host:String, port:Option[Int], user:String, pass:String, maxAge: Option[Duration],directories: Seq[MonitoredDirectory])
+case class FtpMonitorSettings(host:String, port:Option[Int], user:String, pass:String, maxAge: Option[Duration],directories: Seq[MonitoredPath])
 
 // the store where FileMetaData is kept and can be retrieved from
 trait FileMetaDataStore {
@@ -80,7 +93,7 @@ class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) ext
   }
 
   // translates a MonitoredDirectory and previously known FileMetaData into a FileMetaData and FileBody
-  def handleFetchedFile(w:MonitoredDirectory, optPreviously: Option[FileMetaData], current:FetchedFile): (FileMetaData, Option[FileBody]) =
+  def handleFetchedFile(w:MonitoredPath, optPreviously: Option[FileMetaData], current:FetchedFile): (FileMetaData, Option[FileBody]) =
     optPreviously match {
       case Some(previously) if previously.attribs.size != current.meta.attribs.size || previously.hash != current.meta.hash =>
         // file changed in size and/or hash
@@ -116,12 +129,12 @@ class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) ext
         (current.meta.inspectedNow().modifiedNow(), Some(FileBody(current.body,0)))
     }
 
-  def debugLogFiles(files:Seq[FTPFile], w:MonitoredDirectory): Unit = files.foreach(f =>
+  def debugLogFiles(files:Seq[FTPFile], w:MonitoredPath): Unit = files.foreach(f =>
       {
         logger.debug(s"${f}")
         logger.debug(s"${f.getName} is file: ${f.isFile}")
         if (f.isFile) {
-          val abs = AbsoluteFtpFile(f, w.directory)
+          val abs = AbsoluteFtpFile(f, w.baseDirectory)
           logger.debug(s"${f.getName} is relevant according to search pattern: ${w.isFileRelevant(abs)}")
           logger.debug(s"${f.getName} age is ${abs.age}; MaxAge is ${MaxAge}")
         }
@@ -130,18 +143,18 @@ class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) ext
 
 
   // fetches files from a monitored directory when needed
-  def fetchFromMonitoredPlaces(w:MonitoredDirectory): Seq[(FileMetaData, Option[FileBody])] = {
-    val files = ftp.listFiles(w.directory).toSeq
+  def fetchFromMonitoredPlaces(w:MonitoredPath): Seq[(FileMetaData, Option[FileBody])] = {
+    val files = ftp.listFiles(w.baseDirectory).toSeq
     val toBeFetched = files
       .filter(_.isFile)
-      .map(AbsoluteFtpFile(_, w.directory))
+      .map(AbsoluteFtpFile(_, w.baseDirectory))
       .filter(w.isFileRelevant)
       .filter(f => !MaxAge.minus(f.age).isNegative) // TODO quick HACK: potentially avoid requiresFetch to avoid slow ConnectFileMetaDataStore
       .filter{ f => requiresFetch(f, knownFiles.get(f.path)) }
 
     debugLogFiles(files, w)
 
-    logger.info(s"we'll be fetching ${toBeFetched.length} items from ${w.directory} ${w.filenameRegex}")
+    logger.info(s"we'll be fetching ${toBeFetched.length} items from ${w.baseDirectory}")
     toBeFetched.foreach(f=>
       {
         val kf = knownFiles.get(f.path)
@@ -189,7 +202,7 @@ class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) ext
     Success(ftp)
   }
 
-  def poll(): Try[Seq[(FileMetaData, FileBody, MonitoredDirectory)]] = Try(connectFtp() match {
+  def poll(): Try[Seq[(FileMetaData, FileBody, MonitoredPath)]] = Try(connectFtp() match {
       case Success(_) =>
         val v = settings.directories.flatMap(w => {
           val results: Seq[(FileMetaData, Option[FileBody])] = fetchFromMonitoredPlaces(w)

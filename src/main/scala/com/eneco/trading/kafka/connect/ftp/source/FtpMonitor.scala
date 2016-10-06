@@ -201,6 +201,7 @@ class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) ext
       ftp.enterLocalPassiveMode()
       logger.info("passive we are")
       ftp.setFileType(FTP.BINARY_FILE_TYPE)
+      ftp.setControlKeepAliveTimeout(15) //send NOOP every [seconds]
     }
     Success(ftp)
   }

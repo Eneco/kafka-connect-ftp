@@ -28,7 +28,8 @@ class FtpSourceConnector extends SourceConnector with StrictLogging {
   }
 
   override def start(props: util.Map[String, String]): Unit = {
-    logger.info("start")
+    logger.info(s"start FtpSourceConnector ${GitRepositoryState.summary}")
+
     configProps = Some(props)
     Try(new FtpSourceConfig(props)) match {
       case Failure(f) => throw new ConnectException("Couldn't start due to configuration error: " + f.getMessage, f)

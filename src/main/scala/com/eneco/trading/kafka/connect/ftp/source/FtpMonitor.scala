@@ -82,6 +82,7 @@ class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) ext
     val baos = new ByteArrayOutputStream()
     if (ftp.retrieveFile(file.path, baos)) {
       val bytes = baos.toByteArray
+      baos.close()
       val hash = DigestUtils.sha256Hex(bytes)
       Success(FetchedFile(knownFile match {
         case None => FileMetaData(new FileAttributes(file.path, file.ftpFile.getSize, file.ftpFile.getTimestamp.toInstant), hash, Instant.now, Instant.now, Instant.now)

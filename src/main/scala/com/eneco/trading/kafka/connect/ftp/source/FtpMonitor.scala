@@ -198,6 +198,8 @@ class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) ext
         return Failure(new Exception("cannot connect to ftp because of some unreported error"))
       }
       logger.info("successfully connected to the ftp server and logged in")
+      ftp.enterLocalPassiveMode()
+      logger.info("passive we are")
       ftp.setFileType(FTP.BINARY_FILE_TYPE)
     }
     Success(ftp)

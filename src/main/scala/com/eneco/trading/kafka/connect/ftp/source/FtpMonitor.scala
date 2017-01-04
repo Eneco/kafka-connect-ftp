@@ -1,13 +1,14 @@
 package com.eneco.trading.kafka.connect.ftp.source
 
 import java.io.ByteArrayOutputStream
-import java.nio.file.{FileSystem, FileSystems, Paths}
+import java.nio.file.{FileSystems, Paths}
 import java.time.{Duration, Instant}
 import java.util
 
 import com.typesafe.scalalogging.slf4j.StrictLogging
 import org.apache.commons.codec.digest.DigestUtils
 import org.apache.commons.net.ftp.{FTP, FTPClient, FTPFile, FTPReply}
+import org.apache.commons.net.{ProtocolCommandEvent, ProtocolCommandListener}
 
 import scala.util.{Failure, Success, Try}
 
@@ -55,7 +56,7 @@ case class MonitoredPath(path:String, tail:Boolean) {
 case class FileBody(bytes:Array[Byte], offset:Long)
 
 // instructs the FtpMonitor how to do its things
-case class FtpMonitorSettings(host:String, port:Option[Int], user:String, pass:String, maxAge: Option[Duration],directories: Seq[MonitoredPath])
+case class FtpMonitorSettings(host:String, port:Option[Int], user:String, pass:String, maxAge: Option[Duration],directories: Seq[MonitoredPath], timeoutMs:Int)
 
 // the store where FileMetaData is kept and can be retrieved from
 trait FileMetaDataStore {
@@ -181,6 +182,17 @@ class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) ext
   def connectFtp(): Try[FTPClient] = {
     ftp.disconnect() // TODO: maybe we should keep the connection open. However, the underlying ftp client is a major PITA and this is way easier.
     if (!ftp.isConnected) {
+      ftp.setConnectTimeout(settings.timeoutMs)
+      ftp.setDefaultTimeout(settings.timeoutMs)
+      ftp.setDataTimeout(settings.timeoutMs)
+      ftp.addProtocolCommandListener(new ProtocolCommandListener {
+        override def protocolCommandSent(e: ProtocolCommandEvent): Unit = logger.trace(s">> ${e.getCommand} ${e.getMessage} ${e.getReplyCode} ${e.isCommand} ${e.isReply}")
+
+        override def protocolReplyReceived(e: ProtocolCommandEvent): Unit = logger.trace(s"<< ${e.getCommand} ${e.getMessage} ${e.getReplyCode} ${e.isCommand} ${e.isReply}")
+      }
+      )
+
+      logger.info(s"connect ${settings.host}:${settings.port}")
       settings.port match {
         case Some(explicitPort) => ftp.connect(settings.host, explicitPort)
         case None => ftp.connect(settings.host)

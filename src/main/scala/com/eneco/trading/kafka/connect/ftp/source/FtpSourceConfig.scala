@@ -64,4 +64,6 @@ class FtpSourceConfig(props: util.Map[String, String])
 
   def sourceRecordConverter(): SourceRecordConverter =
     getConfiguredInstance(FtpSourceConfig.SourceRecordConverter, classOf[SourceRecordConverter])
+
+  def timeoutMs() = 30*1000
 }

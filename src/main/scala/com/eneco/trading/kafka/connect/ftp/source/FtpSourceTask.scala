@@ -70,7 +70,8 @@ class FtpSourcePoller(cfg: FtpSourceConfig, offsetStorage: OffsetStorageReader) 
       cfg.getString(FtpSourceConfig.User),
       cfg.getPassword(FtpSourceConfig.Password).value,
       Some(Duration.parse(cfg.getString(FtpSourceConfig.FileMaxAge))),
-      monitor2topic.keys.toSeq),
+      monitor2topic.keys.toSeq,
+      cfg.timeoutMs()),
     metaStore)}
 
   val recordMaker:SourceRecordProducer = cfg.keyStyle match {

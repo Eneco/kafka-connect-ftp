@@ -185,6 +185,7 @@ class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) ext
       ftp.setConnectTimeout(settings.timeoutMs)
       ftp.setDefaultTimeout(settings.timeoutMs)
       ftp.setDataTimeout(settings.timeoutMs)
+      ftp.setRemoteVerificationEnabled(false)
       ftp.addProtocolCommandListener(new ProtocolCommandListener {
         override def protocolCommandSent(e: ProtocolCommandEvent): Unit = logger.trace(s">> ${e.getCommand} ${e.getMessage} ${e.getReplyCode} ${e.isCommand} ${e.isReply}")
 

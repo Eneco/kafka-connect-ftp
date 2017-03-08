@@ -52,12 +52,14 @@ class FtpMonitor(settings:FtpMonitorSettings, fileConverter: FileConverter) exte
 
   val ftp = new FTPClient()
 
-  def requiresFetch(file: AbsoluteFtpFile, knownFile: Option[FileMetaData]):Boolean = knownFile match {
-    // file previously unknown? fetch
-    case None => !MaxAge.minus(file.age).isNegative
-    case Some(known) if known.attribs.size != file.ftpFile.getSize => true
-    case Some(known) if known.attribs.timestamp != file.ftpFile.getTimestamp.toInstant => true
-    case _ => false
+  def requiresFetch(file: AbsoluteFtpFile): Boolean = {
+    // Reduce calls to metastore by checking age first
+    !MaxAge.minus(file.age).isNegative && (fileConverter.getFileOffset(file.path) match {
+      case None => true
+      case Some(known) if known.attribs.size != file.ftpFile.getSize => true
+      case Some(known) if known.attribs.timestamp != file.ftpFile.getTimestamp.toInstant => true
+      case _ => false
+    })
   }
 
   // Retrieves the FtpAbsoluteFile and returns a new or updated KnownFile
@@ -103,7 +105,7 @@ class FtpMonitor(settings:FtpMonitorSettings, fileConverter: FileConverter) exte
           logger.info(s"dump entire ${current.meta.attribs.path}")
           (current.meta.inspectedNow().modifiedNow(), Some(FileBody(current.body,0)))
         }
-      case Some(previouslyKnownFile) =>
+      case Some(_) =>
         // file didn't change
         logger.info(s"fetched ${current.meta.attribs.path}, it was known before and it didn't change")
         (current.meta.inspectedNow(), None)
@@ -130,13 +132,10 @@ class FtpMonitor(settings:FtpMonitorSettings, fileConverter: FileConverter) exte
   // fetches files from a monitored directory when needed
   def fetchFromMonitoredPlaces(w:MonitoredPath): Seq[(FileMetaData, Option[FileBody])] = {
     val files = ftp.listFiles(w.baseDirectory).toSeq
-    logger.info(s"Found ${files.size} files at ${w.baseDirectory}")
     val toBeFetched = files
       .filter(_.isFile)
       .map(AbsoluteFtpFile(_, w.baseDirectory))
-      .filter(f => w.isFileRelevant(f) &&
-        !MaxAge.minus(f.age).isNegative && // Reduce calls to metastore
-        requiresFetch(f, fileConverter.getFileOffset(f.path)))
+      .filter(f => w.isFileRelevant(f) && requiresFetch(f))
 
     debugLogFiles(files, w)
 

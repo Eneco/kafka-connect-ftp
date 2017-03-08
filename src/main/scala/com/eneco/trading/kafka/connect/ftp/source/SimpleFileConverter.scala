@@ -1,6 +1,5 @@
 package com.eneco.trading.kafka.connect.ftp.source
 
-import java.time.Instant
 import java.util
 
 import com.eneco.trading.kafka.connect.ftp.source.SourceRecordProducers.SourceRecordProducer

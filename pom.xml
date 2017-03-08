@@ -4,7 +4,7 @@
   <groupId>com.eneco.trading</groupId>
   <artifactId>kafka-connect-ftp</artifactId>
   <packaging>jar</packaging>
-  <version>0.1</version>
+  <version>${version}</version>
   <name>kafka-connect-ftp</name>
   <organization>
     <name>Eneco</name>

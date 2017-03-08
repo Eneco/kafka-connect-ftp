@@ -48,6 +48,7 @@
     </developer>
   </developers>
   <properties>
+    <version>0.0.0-unspecified</version>
     <java.version>1.8</java.version>
     <scala.version>2.11.7</scala.version>
     <confluent.version>3.0.0</confluent.version>

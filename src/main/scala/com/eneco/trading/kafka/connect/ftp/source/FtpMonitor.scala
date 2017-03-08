@@ -12,19 +12,6 @@ import org.apache.commons.net.{ProtocolCommandEvent, ProtocolCommandListener}
 
 import scala.util.{Failure, Success, Try}
 
-// what the ftp can tell us without actually fetching the file
-case class FileAttributes(path: String, size: Long, timestamp: Instant) {
-  override def toString() = s"(path: ${path}, size: ${size}, timestamp: ${timestamp})"
-}
-
-// used to administer the files
-// this is persistent data, stored into the connect offsets
-case class FileMetaData(attribs:FileAttributes, hash:String, firstFetched:Instant, lastModified:Instant, lastInspected:Instant) {
-  def modifiedNow() = FileMetaData(attribs, hash, firstFetched, Instant.now, lastInspected)
-  def inspectedNow() = FileMetaData(attribs, hash, firstFetched, lastModified, Instant.now)
-  override def toString() = s"(remoteInfo: ${attribs}, hash: ${hash}, firstFetched: ${firstFetched}, lastModified: ${lastModified}, lastInspected: ${lastInspected}"
-}
-
 // a full downloaded file
 case class FetchedFile(meta:FileMetaData, body: Array[Byte])
 
@@ -58,13 +45,9 @@ case class FileBody(bytes:Array[Byte], offset:Long)
 // instructs the FtpMonitor how to do its things
 case class FtpMonitorSettings(host:String, port:Option[Int], user:String, pass:String, maxAge: Option[Duration],directories: Seq[MonitoredPath], timeoutMs:Int)
 
-// the store where FileMetaData is kept and can be retrieved from
-trait FileMetaDataStore {
-  def get(path:String) : Option[FileMetaData]
-  def set(path:String, fileMetaData: FileMetaData)
-}
 
-class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) extends StrictLogging {
+
+class FtpMonitor(settings:FtpMonitorSettings, fileConverter: FileConverter) extends StrictLogging {
   val MaxAge = settings.maxAge.getOrElse(Duration.ofDays(Long.MaxValue))
 
   val ftp = new FTPClient()
@@ -147,19 +130,20 @@ class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) ext
   // fetches files from a monitored directory when needed
   def fetchFromMonitoredPlaces(w:MonitoredPath): Seq[(FileMetaData, Option[FileBody])] = {
     val files = ftp.listFiles(w.baseDirectory).toSeq
+    logger.info(s"Found ${files.size} files at ${w.baseDirectory}")
     val toBeFetched = files
       .filter(_.isFile)
       .map(AbsoluteFtpFile(_, w.baseDirectory))
-      .filter(w.isFileRelevant)
-      .filter(f => !MaxAge.minus(f.age).isNegative) // TODO quick HACK: potentially avoid requiresFetch to avoid slow ConnectFileMetaDataStore
-      .filter{ f => requiresFetch(f, knownFiles.get(f.path)) }
+      .filter(f => w.isFileRelevant(f) &&
+        !MaxAge.minus(f.age).isNegative && // Reduce calls to metastore
+        requiresFetch(f, fileConverter.getFileOffset(f.path)))
 
     debugLogFiles(files, w)
 
     logger.info(s"we'll be fetching ${toBeFetched.length} items from ${w.baseDirectory}")
     toBeFetched.foreach(f=>
       {
-        val kf = knownFiles.get(f.path)
+        val kf = fileConverter.getFileOffset(f.path)
         logger.info(s"we'll be fetching ${f.path} ${f.ftpFile.getSize} ${f.ftpFile.getTimestamp.toInstant} (age: ${f.age})")
         logger.info(s"what we knew from our store of ${f.path}: " + (kf match {
           case Some(f) => s"${f.attribs.size} ${f.attribs.timestamp}"
@@ -167,7 +151,7 @@ class FtpMonitor(settings:FtpMonitorSettings, knownFiles: FileMetaDataStore) ext
         }))
       })
 
-    val previouslyKnown = toBeFetched.map(f => knownFiles.get(f.path))
+    val previouslyKnown = toBeFetched.map(f => fileConverter.getFileOffset(f.path))
 
     val fetchResults = toBeFetched zip previouslyKnown map { case (f, k) => fetch(f, k) }
 

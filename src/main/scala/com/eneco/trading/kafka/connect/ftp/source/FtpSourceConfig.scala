@@ -28,6 +28,7 @@ object FtpSourceConfig {
   val KeyStyle = "ftp.keystyle"
   val StringKeyStyle = "string"
   val StructKeyStyle = "struct"
+  val FileConverter = "ftp.fileconverter"
   val SourceRecordConverter = "ftp.sourcerecordconverter"
 
   val definition: ConfigDef = new ConfigDef()
@@ -40,6 +41,7 @@ object FtpSourceConfig {
     .define(MonitorTail, Type.LIST, "", Importance.HIGH, "comma separated lists of path:destinationtopic; tail of file is tracked")
     .define(MonitorUpdate, Type.LIST, "", Importance.HIGH, "comma separated lists of path:destinationtopic; whole file is tracked")
     .define(KeyStyle, Type.STRING, Importance.HIGH, s"what the output key is set to: `${StringKeyStyle}` => filename; `${StructKeyStyle}` => structure with filename and offset")
+    .define(FileConverter, Type.CLASS, "com.eneco.trading.kafka.connect.ftp.source.SimpleFileConverter", Importance.HIGH, s"TODO")
     .define(SourceRecordConverter, Type.CLASS, "com.eneco.trading.kafka.connect.ftp.source.NopSourceRecordConverter", Importance.HIGH, s"TODO")
 }
 
@@ -64,6 +66,8 @@ class FtpSourceConfig(props: util.Map[String, String])
 
   def sourceRecordConverter(): SourceRecordConverter =
     getConfiguredInstance(FtpSourceConfig.SourceRecordConverter, classOf[SourceRecordConverter])
+
+  def fileConverter = getClass(FtpSourceConfig.FileConverter)
 
   def timeoutMs() = 30*1000
 }

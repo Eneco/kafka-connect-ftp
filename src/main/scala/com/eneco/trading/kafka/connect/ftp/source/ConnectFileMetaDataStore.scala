@@ -43,12 +43,17 @@ class ConnectFileMetaDataStore(offsetStorage: OffsetStorageReader) extends FileM
 
   def connectOffsetToFileMetas(path:String, o:AnyRef): FileMetaData = {
     val jm = o.asInstanceOf[java.util.Map[String, AnyRef]]
-    FileMetaData(FileAttributes(path, jm.get("size").asInstanceOf[Long],
-      Instant.ofEpochMilli(jm.get("timestamp").asInstanceOf[Long])
-    ), jm.get("hash").asInstanceOf[String],
+    FileMetaData(
+      FileAttributes(
+        path,
+        jm.get("size").asInstanceOf[Long],
+        Instant.ofEpochMilli(jm.get("timestamp").asInstanceOf[Long])
+      ),
+      jm.get("hash").asInstanceOf[String],
       Instant.ofEpochMilli(jm.get("firstfetched").asInstanceOf[Long]),
       Instant.ofEpochMilli(jm.get("lastmodified").asInstanceOf[Long]),
-      Instant.ofEpochMilli(jm.get("lastinspected").asInstanceOf[Long])
+      Instant.ofEpochMilli(jm.get("lastinspected").asInstanceOf[Long]),
+      jm.asScala.getOrElse("offset", -1L).asInstanceOf[Long]
     )
   }
 
@@ -58,7 +63,8 @@ class ConnectFileMetaDataStore(offsetStorage: OffsetStorageReader) extends FileM
       "hash" -> meta.hash,
       "firstfetched" -> meta.firstFetched.toEpochMilli,
       "lastmodified" -> meta.lastModified.toEpochMilli,
-      "lastinspected" -> meta.lastInspected.toEpochMilli
+      "lastinspected" -> meta.lastInspected.toEpochMilli,
+      "offset" -> meta.offset
     ).asJava
   }
 }

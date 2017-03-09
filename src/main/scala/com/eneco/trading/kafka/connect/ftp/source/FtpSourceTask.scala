@@ -14,45 +14,13 @@ import scala.collection.JavaConverters._
 import scala.util.{Failure, Success}
 
 // holds functions that translate a file meta+body into a source record
-object SourceRecordProducers {
-  type SourceRecordProducer = (ConnectFileMetaDataStore, String, FileMetaData, FileBody) => SourceRecord
 
-  val fileInfoSchema = SchemaBuilder.struct().name("com.eneco.trading.kafka.connect.ftp.FileInfo")
-    .field("name", Schema.STRING_SCHEMA)
-    .field("offset", Schema.INT64_SCHEMA)
-    .build()
-
-  def stringKeyRecord(store: ConnectFileMetaDataStore, topic: String, meta: FileMetaData, body: FileBody): SourceRecord =
-    new SourceRecord(
-      store.fileMetasToConnectPartition(meta), // source part
-      store.fileMetasToConnectOffset(meta), // source off
-      topic, //topic
-      Schema.STRING_SCHEMA, // key sch
-      meta.attribs.path, // key
-      Schema.BYTES_SCHEMA, // val sch
-      body.bytes // val
-    )
-
-  def structKeyRecord(store: ConnectFileMetaDataStore, topic: String, meta: FileMetaData, body: FileBody): SourceRecord = {
-    new SourceRecord(
-      store.fileMetasToConnectPartition(meta), // source part
-      store.fileMetasToConnectOffset(meta), // source off
-      topic, //topic
-      fileInfoSchema, // key sch
-      new Struct(fileInfoSchema)
-        .put("name",meta.attribs.path)
-        .put("offset",body.offset),
-      Schema.BYTES_SCHEMA, // val sch
-      body.bytes // val
-    )
-  }
-}
 
 // bridges between the Connect reality and the (agnostic) FtpMonitor reality.
 // logic could have been in FtpSourceTask directly, but FtpSourceTask's imperative nature made things a bit ugly,
 // from a Scala perspective.
 class FtpSourcePoller(cfg: FtpSourceConfig, offsetStorage: OffsetStorageReader) extends StrictLogging {
-  val metaStore = new ConnectFileMetaDataStore(offsetStorage)
+  val fileConverter = FileConverter(cfg.fileConverter, cfg.originalsStrings(), offsetStorage)
 
   val monitor2topic = cfg.ftpMonitorConfigs()
     .map(monitorCfg => (MonitoredPath(monitorCfg.path, monitorCfg.tail), monitorCfg.topic)).toMap
@@ -62,7 +30,8 @@ class FtpSourcePoller(cfg: FtpSourceConfig, offsetStorage: OffsetStorageReader) 
 
   var backoff = new ExponentialBackOff(pollDuration, maxBackoff)
 
-  val ftpMonitor = {val (host,optPort) = cfg.address
+  val ftpMonitor = {
+    val (host,optPort) = cfg.address
     new FtpMonitor(
     FtpMonitorSettings(
       host,
@@ -72,14 +41,8 @@ class FtpSourcePoller(cfg: FtpSourceConfig, offsetStorage: OffsetStorageReader) 
       Some(Duration.parse(cfg.getString(FtpSourceConfig.FileMaxAge))),
       monitor2topic.keys.toSeq,
       cfg.timeoutMs()),
-    metaStore)}
-
-  val recordMaker:SourceRecordProducer = cfg.keyStyle match {
-    case KeyStyle.String => SourceRecordProducers.stringKeyRecord
-    case KeyStyle.Struct => SourceRecordProducers.structKeyRecord
+      fileConverter)
   }
-
-  val recordConverter:SourceRecordConverter = cfg.sourceRecordConverter
 
   def poll(): Seq[SourceRecord] = {
     if (backoff.passed) {
@@ -87,14 +50,12 @@ class FtpSourcePoller(cfg: FtpSourceConfig, offsetStorage: OffsetStorageReader) 
       ftpMonitor.poll() match {
         case Success(fileChanges) =>
           backoff = backoff.nextSuccess
-          fileChanges.map({ case (meta, body, w) =>
+          fileChanges.flatMap({ case (meta, body, w) =>
             logger.info(s"got some fileChanges: ${meta.attribs.path}")
-            metaStore.set(meta.attribs.path, meta)
-            val topic = monitor2topic(w)
-            recordMaker(metaStore, topic, meta, body)
-          }).flatMap(recordConverter.convert(_).asScala)
+            fileConverter.convert(monitor2topic(w), meta, body)
+          })
         case Failure(err) =>
-          logger.warn(s"ftp monitor failed: $err")
+          logger.warn(s"ftp monitor failed: $err", err)
           backoff = backoff.nextFailure
           logger.info(s"let's backoff ${backoff.remaining}")
           Seq[SourceRecord]()

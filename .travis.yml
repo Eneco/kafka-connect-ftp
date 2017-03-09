@@ -6,7 +6,7 @@ services:
 language: scala
 scala: 2.11.7
 jdk: oraclejdk8
-script: mvn package
+script: mvn package -Dversion=$(git describe --tag --dirty)
 
 after_success:
   - ./deploy.sh

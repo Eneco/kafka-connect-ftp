@@ -3,7 +3,7 @@ TAG=$(git describe --exact-match)
 
 if [ "$TAG" ]; then
   docker login -u="$DOCKER_USER" -p="$DOCKER_PASS" && \
-  docker build -t $IMAGE . && \
+  docker build --build-arg version=$TAG -t $IMAGE . && \
   docker tag $IMAGE $IMAGE:latest && \
   docker tag $IMAGE $IMAGE:$TAG && \
   docker push $IMAGE:latest && \

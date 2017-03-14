@@ -15,28 +15,11 @@ import scala.util.{Failure, Success, Try}
 // a full downloaded file
 case class FetchedFile(meta:FileMetaData, body: Array[Byte])
 
-// org.apache.commons.net.ftp.FTPFile only contains the relative path
-case class AbsoluteFtpFile(ftpFile:FTPFile, parentDir:String) {
-  def path() = Paths.get(parentDir, ftpFile.getName).toString
-  def age(): Duration = Duration.between(ftpFile.getTimestamp.toInstant,Instant.now)
-}
+
 
 // tells to monitor which directory and how files are dealt with, might be better a trait and is TODO
 case class MonitoredPath(path:String, tail:Boolean) {
   val p = Paths.get(if (path.endsWith("/")) path + "*" else path)
-
-  val pattern = p.getFileName.toString  // glob
-  val baseDirectory:String = p.getParent.toString match {
-    case pp if pp.endsWith("/") => pp
-    case pp => pp + "/"
-  }
-
-  def isFileRelevant(path:String):Boolean = {
-    val g = s"glob:$baseDirectory$pattern"
-    FileSystems.getDefault.getPathMatcher(g).matches(Paths.get(path))
-  }
-
-  def isFileRelevant(f:AbsoluteFtpFile):Boolean = isFileRelevant(f.path)
 }
 
 // a potential partial file
@@ -116,30 +99,22 @@ class FtpMonitor(settings:FtpMonitorSettings, fileConverter: FileConverter) exte
         (current.meta.inspectedNow().modifiedNow(), Some(FileBody(current.body,0)))
     }
 
-  def debugLogFiles(files:Seq[FTPFile], w:MonitoredPath): Unit = files.foreach(f =>
+  def debugLogFiles(files:Seq[AbsoluteFtpFile], w:MonitoredPath): Unit = files.foreach(f =>
       {
-        logger.debug(s"${f}")
-        logger.debug(s"${f.getName} is file: ${f.isFile}")
-        if (f.isFile) {
-          val abs = AbsoluteFtpFile(f, w.baseDirectory)
-          logger.debug(s"${f.getName} is relevant according to search pattern: ${w.isFileRelevant(abs)}")
-          logger.debug(s"${f.getName} age is ${abs.age}; MaxAge is ${MaxAge}")
-        }
+        logger.debug(s"${f.ftpFile}")
+        logger.debug(s"${f.ftpFile.getName} age is ${f.age}; MaxAge is ${MaxAge}")
       }
     )
 
 
   // fetches files from a monitored directory when needed
   def fetchFromMonitoredPlaces(w:MonitoredPath): Seq[(FileMetaData, Option[FileBody])] = {
-    val files = ftp.listFiles(w.baseDirectory).toSeq
-    val toBeFetched = files
-      .filter(_.isFile)
-      .map(AbsoluteFtpFile(_, w.baseDirectory))
-      .filter(f => w.isFileRelevant(f) && requiresFetch(f))
+    val files = FtpFileLister(ftp).listFiles(w.p.toString)
+    val toBeFetched = files.filter(requiresFetch(_))
 
     debugLogFiles(files, w)
 
-    logger.info(s"we'll be fetching ${toBeFetched.length} items from ${w.baseDirectory}")
+    logger.info(s"we'll be fetching ${toBeFetched.length} items from ${w.p}")
     toBeFetched.foreach(f=>
       {
         val kf = fileConverter.getFileOffset(f.path)

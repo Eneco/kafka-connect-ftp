@@ -201,4 +201,31 @@ class EndToEndTests extends FunSuite with Matchers with BeforeAndAfter with Stri
 
     server.stop()
   }
+
+  test("Streaming flow: files are only fetched when the records are polled") {
+    logger.info("Start test")
+    val fs = new FileSystem(server.rootDir).clear
+    server.start()
+
+    val cfg = new FtpSourceConfig(
+      defaultConfig
+        .updated(FtpSourceConfig.KeyStyle,"string")
+        .updated(FtpSourceConfig.FtpMaxPollRecords, "1").asJava
+    )
+
+    val offsets = new DummyOffsetStorage
+    val poller = new FtpSourcePoller(cfg, offsets)
+    poller.poll() shouldBe empty
+
+    fs.applyChanges(changeSets.head)
+    poller.poll().size shouldBe 1
+
+    // clear the ftp directory and the poll will return an empty record,
+    // if not it succeeds then the file was pulled before it was needed
+    fs.clear()
+    poller.poll() // This will return the single cached record
+    poller.poll().size shouldBe 0 // Empty because the files have been removed.
+
+    server.stop()
+  }
 }

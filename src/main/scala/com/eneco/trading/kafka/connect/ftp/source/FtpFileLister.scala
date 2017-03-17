@@ -8,8 +8,11 @@ import org.apache.commons.net.ftp.{FTPClient, FTPFile}
 
 // org.apache.commons.net.ftp.FTPFile only contains the relative path
 case class AbsoluteFtpFile(ftpFile:FTPFile, parentDir:String) {
-  def path() = Paths.get(parentDir, ftpFile.getName).toString
-  def age(): Duration = Duration.between(ftpFile.getTimestamp.toInstant, Instant.now)
+  def name() = ftpFile.getName
+  def size() = ftpFile.getSize
+  def timestamp() = ftpFile.getTimestamp.toInstant
+  def path() = Paths.get(parentDir, name).toString
+  def age(): Duration = Duration.between(timestamp, Instant.now)
 }
 
 case class FtpFileLister(ftp: FTPClient) extends StrictLogging {

@@ -3,6 +3,7 @@ package com.eneco.trading.kafka.connect.ftp.source
 import java.util
 
 import com.eneco.trading.kafka.connect.ftp.source.SourceRecordProducers.SourceRecordProducer
+import com.typesafe.scalalogging.slf4j.StrictLogging
 import org.apache.kafka.connect.data.{Schema, SchemaBuilder, Struct}
 import org.apache.kafka.connect.source.SourceRecord
 import org.apache.kafka.connect.storage.OffsetStorageReader
@@ -14,7 +15,7 @@ import scala.collection.JavaConverters._
   * including the file attributes.
   */
 class SimpleFileConverter(props: util.Map[String, String], offsetStorageReader : OffsetStorageReader)
-  extends FileConverter(props, offsetStorageReader) {
+  extends FileConverter(props, offsetStorageReader) with StrictLogging {
 
   val cfg = new FtpSourceConfig(props)
   val metaStore = new ConnectFileMetaDataStore(offsetStorageReader)
@@ -25,6 +26,7 @@ class SimpleFileConverter(props: util.Map[String, String], offsetStorageReader :
   }
 
   override def convert(topic: String, meta: FileMetaData, body: FileBody): Seq[SourceRecord] = {
+    logger.info(s"File contents ${new String(body.bytes, "UTF-8")}")
     metaStore.set(meta.attribs.path, meta)
     recordConverter.convert(recordMaker(metaStore, topic, meta, body)).asScala
   }

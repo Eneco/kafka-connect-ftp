@@ -30,6 +30,7 @@ object FtpSourceConfig {
   val StructKeyStyle = "struct"
   val FileConverter = "ftp.fileconverter"
   val SourceRecordConverter = "ftp.sourcerecordconverter"
+  val FtpMaxPollRecords = "ftp.max.poll.records"
 
   val definition: ConfigDef = new ConfigDef()
     .define(Address, Type.STRING, Importance.HIGH, "ftp address[:port]")
@@ -43,6 +44,7 @@ object FtpSourceConfig {
     .define(KeyStyle, Type.STRING, Importance.HIGH, s"what the output key is set to: `${StringKeyStyle}` => filename; `${StructKeyStyle}` => structure with filename and offset")
     .define(FileConverter, Type.CLASS, "com.eneco.trading.kafka.connect.ftp.source.SimpleFileConverter", Importance.HIGH, s"TODO")
     .define(SourceRecordConverter, Type.CLASS, "com.eneco.trading.kafka.connect.ftp.source.NopSourceRecordConverter", Importance.HIGH, s"TODO")
+    .define(FtpMaxPollRecords, Type.INT, 10000, Importance.LOW, "Max number of records returned per poll")
 }
 
 // abstracts the properties away a bit
@@ -70,4 +72,6 @@ class FtpSourceConfig(props: util.Map[String, String])
   def fileConverter = getClass(FtpSourceConfig.FileConverter)
 
   def timeoutMs() = 30*1000
+
+  def maxPollRecords = getInt(FtpSourceConfig.FtpMaxPollRecords)
 }

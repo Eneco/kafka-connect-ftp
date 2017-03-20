@@ -3,14 +3,13 @@ package com.eneco.trading.kafka.connect.ftp.source
 import java.time.{Duration, Instant}
 import java.util
 
-import com.eneco.trading.kafka.connect.ftp.source.SourceRecordProducers.SourceRecordProducer
-import org.apache.kafka.connect.data.{Schema, SchemaBuilder, Struct}
 import org.apache.kafka.connect.errors.ConnectException
 import org.apache.kafka.connect.source.{SourceRecord, SourceTask}
 import org.apache.kafka.connect.storage.OffsetStorageReader
 import com.typesafe.scalalogging.slf4j.StrictLogging
 
 import scala.collection.JavaConverters._
+import scala.collection.immutable.Stream.Empty
 import scala.util.{Failure, Success}
 
 // holds functions that translate a file meta+body into a source record
@@ -29,6 +28,7 @@ class FtpSourcePoller(cfg: FtpSourceConfig, offsetStorage: OffsetStorageReader) 
   val maxBackoff = Duration.parse(cfg.getString(FtpSourceConfig.MaxBackoff))
 
   var backoff = new ExponentialBackOff(pollDuration, maxBackoff)
+  var buffer : Stream[SourceRecord] = Empty
 
   val ftpMonitor = {
     val (host,optPort) = cfg.address
@@ -44,7 +44,14 @@ class FtpSourcePoller(cfg: FtpSourceConfig, offsetStorage: OffsetStorageReader) 
       fileConverter)
   }
 
-  def poll(): Seq[SourceRecord] = {
+  def poll(): Stream[SourceRecord] = {
+    val stream = if (buffer.isEmpty) fetchRecords() else buffer
+    val (head, tail) = stream.splitAt(cfg.maxPollRecords)
+    buffer = tail
+    head
+  }
+
+  def fetchRecords(): Stream[SourceRecord] = {
     if (backoff.passed) {
       logger.info("poll")
       ftpMonitor.poll() match {
@@ -58,11 +65,11 @@ class FtpSourcePoller(cfg: FtpSourceConfig, offsetStorage: OffsetStorageReader) 
           logger.warn(s"ftp monitor failed: $err", err)
           backoff = backoff.nextFailure
           logger.info(s"let's backoff ${backoff.remaining}")
-          Seq[SourceRecord]()
+          Empty
       }
     } else {
       Thread.sleep(1000)
-      Seq[SourceRecord]()
+      Empty
     }
   }
 }

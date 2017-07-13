@@ -88,6 +88,11 @@ docker {
     maintainer 'Eneco Dev'
 }
 
+shadowJar{
+    dependsOn test
+}
+
 task buildDocker(type: Docker) {
     addFile "build/libs/$project.name-$version-all.jar"
+    dependsOn shadowJar
 }

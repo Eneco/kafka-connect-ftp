@@ -101,7 +101,7 @@ class FileSystem(rootDir:Path) {
 class EndToEndTests extends FunSuite with Matchers with BeforeAndAfter with StrictLogging {
   val sEmpty = new Array[Byte](0)
   val s0 = (0 to 255).map(_.toByte).toArray
-  val s1 = "Hebban olla vogala nestas hagunnan hinase hic enda thu wat unbidan we nu\r\n\t\0:)".getBytes
+  val s1 = "Hebban olla vogala nestas hagunnan hinase hic enda thu wat unbidan we nu\r\n\t\u0000:)".getBytes
   val s2 = "<mandatory quote to show off erudition here>".getBytes
   val s3 = "!".getBytes
 

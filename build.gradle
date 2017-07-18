@@ -3,6 +3,7 @@ apply plugin: 'maven'
 apply plugin: 'docker'
 apply plugin: 'com.github.maiflai.scalatest'
 apply plugin: 'com.github.johnrengelman.shadow'
+apply plugin: "com.gorylenko.gradle-git-properties"
 
 
 ext {
@@ -10,10 +11,10 @@ ext {
     scala = '2.11.7'
     scalaTestVersion = '3.0.1'
     scalaLoggingVersion = '2.1.2'
-    kafkaVersion = '0.10.0.0'
+    kafkaVersion = '0.10.2.0'
     avroVersion = '1.7.7'
     slf4jVersion = "1.7.21"
-    confluentVersion = '3.0.0'
+    confluentVersion = '3.2.0'
     pathikritVersion = '2.16.0'
     ftpserverVersion = '1.0.6'
     commonsNetVersion = '3.5'
@@ -60,6 +61,7 @@ buildscript {
         classpath "com.github.maiflai:gradle-scalatest:0.14"
         classpath 'se.transmode.gradle:gradle-docker:1.2'
         classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.1'
+        classpath "gradle.plugin.com.gorylenko.gradle-git-properties:gradle-git-properties:1.4.17"
     }
 }
 
@@ -84,7 +86,7 @@ version = getVersionName()
 
 group = 'eneco'
 docker {
-    baseImage 'eneco/connector-base:0.3.0'
+    baseImage 'eneco/kafka-connect-base:0.1.0'
     maintainer 'Eneco Dev'
 }
 
@@ -93,6 +95,6 @@ shadowJar{
 }
 
 task buildDocker(type: Docker) {
-    addFile "build/libs/$project.name-$version-all.jar"
+    addFile("build/libs/$project.name-$version-all.jar","/usr/local/share/java/$project.name-$version-all.jar")
     dependsOn shadowJar
 }

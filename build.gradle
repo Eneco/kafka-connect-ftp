@@ -94,6 +94,7 @@ shadowJar{
     dependsOn test
 }
 
+group = "eneco"
 task buildDocker(type: Docker) {
     addFile("build/libs/$project.name-$version-all.jar","/usr/local/share/java/$project.name-$version-all.jar")
     dependsOn shadowJar

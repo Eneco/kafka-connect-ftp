@@ -2,10 +2,8 @@ IMAGE=eneco/kafka-connect-ftp
 TAG=$(git describe --exact-match)
 
 if [ "$TAG" ]; then
-  docker login -u="$DOCKER_USER" -p="$DOCKER_PASS" && \
-  docker build --build-arg version=$TAG -t $IMAGE . && \
-  docker tag $IMAGE $IMAGE:latest && \
-  docker tag $IMAGE $IMAGE:$TAG && \
+  docker login -u="$DOCKER_USER" -p="$DOCKER_PASS" &&
+  docker tag $IMAGE:$TAG $IMAGE:latest &&
   docker push $IMAGE:latest && \
   docker push $IMAGE:$TAG && \
   echo published tagged commit $IMAGE:$TAG

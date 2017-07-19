@@ -83,8 +83,6 @@ def getVersionName = { ->
 
 version = getVersionName()
 
-
-group = 'eneco'
 docker {
     baseImage 'eneco/kafka-connect-base:0.1.0'
     maintainer 'Eneco Dev'
